@@ -1,0 +1,173 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="Source Files">
+      <UniqueIdentifier>{4FC737F1-C7A5-4376-A066-2A32D752A2FF}</UniqueIdentifier>
+      <Extensions>cpp;c;cc;cxx;def;odl;idl;hpj;bat;asm;asmx</Extensions>
+    </Filter>
+    <Filter Include="Header Files">
+      <UniqueIdentifier>{93995380-89BD-4b04-88EB-625FBE52EBFB}</UniqueIdentifier>
+      <Extensions>h;hh;hpp;hxx;hm;inl;inc;xsd</Extensions>
+    </Filter>
+    <Filter Include="Resource Files">
+      <UniqueIdentifier>{67DA6AB6-F800-4c08-8B7A-83BB121AAD01}</UniqueIdentifier>
+      <Extensions>rc;ico;cur;bmp;dlg;rc2;rct;bin;rgs;gif;jpg;jpeg;jpe;resx;tiff;tif;png;wav;mfcribbon-ms</Extensions>
+    </Filter>
+    <Filter Include="compiler">
+      <UniqueIdentifier>{0521605b-7498-463f-9d3f-effe1f6925f8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="dvm">
+      <UniqueIdentifier>{837d48b6-342e-4990-a67d-50e4221b03a8}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{b4744057-321a-4cf1-93ec-8297a7698cab}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="debug">
+      <UniqueIdentifier>{4c6231ff-1fc8-4a1a-a83c-218a14197b78}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="memory">
+      <UniqueIdentifier>{05f57c9e-e3ff-4a4f-bc46-8b9f592aed6b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="share">
+      <UniqueIdentifier>{ebe61572-c7bf-42c3-a57a-632935b70119}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <Text Include="ReadMe.txt" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="stdafx.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="targetver.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="diksamc.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="y.tab.h">
+      <Filter>compiler</Filter>
+    </ClInclude>
+    <ClInclude Include="dvm_pri.h">
+      <Filter>dvm</Filter>
+    </ClInclude>
+    <ClInclude Include="DBG.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="DKC.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="DVM.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="DVM_code.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="DVM_dev.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="MEM.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="share.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="memory.h">
+      <Filter>memory</Filter>
+    </ClInclude>
+    <ClInclude Include="debug.h">
+      <Filter>debug</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="stdafx.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="create.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="error.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="error_message.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="fix_tree.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="generate.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="interface.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="lex.yy.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="string.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="util.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="wchar.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="y.tab.c">
+      <Filter>compiler</Filter>
+    </ClCompile>
+    <ClCompile Include="error_dvm.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="error_message_dvm.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="execute.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="heap.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="native.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="util_dvm.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="wchar_dvm.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+    <ClCompile Include="disassemble.c">
+      <Filter>share</Filter>
+    </ClCompile>
+    <ClCompile Include="dispose.c">
+      <Filter>share</Filter>
+    </ClCompile>
+    <ClCompile Include="opcode.c">
+      <Filter>share</Filter>
+    </ClCompile>
+    <ClCompile Include="wchar_share.c">
+      <Filter>share</Filter>
+    </ClCompile>
+    <ClCompile Include="memory.c">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="storage.c">
+      <Filter>memory</Filter>
+    </ClCompile>
+    <ClCompile Include="debug.c">
+      <Filter>debug</Filter>
+    </ClCompile>
+    <ClCompile Include="main.c">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="nativeif.c">
+      <Filter>dvm</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="diksam.y">
+      <Filter>compiler</Filter>
+    </None>
+  </ItemGroup>
+</Project>

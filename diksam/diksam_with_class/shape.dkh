@@ -1,0 +1,54 @@
+require diksam.lang;
+
+interface Printable {
+    public void print();
+}
+
+public abstract class Shape : Printable {
+    int	color;
+
+    public abstract virtual void draw();
+}
+
+public class Line : Shape {
+    double	start_x;
+    double	start_y;
+    double	end_x;
+    double	end_y;
+
+    public override void draw() {
+	println("draw Line!");
+    }
+    public override void print() {
+	println("Line by ¿Óº®≈Ù"+"(" + this.start_x + ", " + this.end_x + ")-("
+		+ this.end_x + ", " + this.end_y + ")"+'\n');
+    }
+    public override constructor initialize(double start_x, double start_y,
+					   double end_x, double end_y) {
+	this.start_x = start_x;
+	this.start_y = start_y;
+	this.end_x = end_x;
+	this.end_y = end_y;
+    }
+}
+
+class Circle : Shape {
+    double	center_x;
+    double	center_y;
+    double	radius;
+
+    public override void draw() {
+	println("draw Circle!");
+    }
+    public override void print() {
+	println("Circle by lijipeng"+"(" + this.center_x + ", " + this.center_y
+		+ "), r.." + this.radius);
+    }
+
+    override constructor initialize(double center_x, double center_y,
+				    double radius) {
+	this.center_x = center_x;
+	this.center_y = center_y;
+	this.radius = radius;
+    }
+}

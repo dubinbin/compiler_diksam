@@ -1,0 +1,8 @@
+require shape;
+
+Shape s = new Line(10, 10, 20, 20);
+Line l = new Line(10, 10, 20, 20);
+//Circle c = new Circle(0,0,100);
+
+s.print();
+s.draw();

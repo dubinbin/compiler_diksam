@@ -1,0 +1,15 @@
+require diksam.lang;
+require classsub;
+
+class ClassSubImpl : ClassSub {
+    public override void print() {
+	println("hello, world.");
+    }
+    constructor initialize() {
+    }
+}
+
+ClassSub create_class_sub() {
+    return new ClassSubImpl();
+}
+
