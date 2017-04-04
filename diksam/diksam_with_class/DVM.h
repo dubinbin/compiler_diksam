@@ -1,8 +1,6 @@
 #ifndef PUBLIC_DVM_H_INCLUDED
 #define PUBLIC_DVM_H_INCLUDED
 
-#include "stdafx.h"
-
 typedef struct DVM_Executable_tag DVM_Executable;
 typedef struct DVM_ExecutableList_tag DVM_ExecutableList;
 typedef struct DVM_VirtualMachine_tag DVM_VirtualMachine;

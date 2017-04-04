@@ -1,7 +1,6 @@
 #ifndef PUBLIC_MEM_H
 #define PUBLIC_MEM_H
 
-#include "stdafx.h"
 #include <stdio.h>
 #include <stdlib.h>
 

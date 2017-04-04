@@ -1,7 +1,5 @@
 #ifndef PUBLIC_DBG_H_INCLUDED
 #define PUBLIC_DBG_H_INCLUDED
-
-#include "stdafx.h"
 #include <stdio.h>      
 #include <stdarg.h>
 

@@ -1,11 +1,8 @@
-#include "stdafx.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 #include "memory.h"
-
-#define DEBUG
 
 static void default_error_handler(MEM_Controller controller,
                                   char *filename, int line, char *msg);
@@ -61,7 +58,6 @@ error_handler(MEM_Controller controller, char *filename, int line, char *msg)
     controller->error_handler(controller, filename, line, msg);
 
     if (controller->fail_mode == MEM_FAIL_AND_EXIT) {
-		getchar();
         exit(1);
     }
 }

@@ -1,10 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 2013
-VisualStudioVersion = 12.0.31101.0
+# Visual Studio 15
+VisualStudioVersion = 15.0.26228.10
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "diksam", "diksam\diksam.vcxproj", "{071AC43D-403D-4B2A-9DEF-B2DD247BF620}"
-EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "diksam_with_class", "diksam_with_class\diksam_with_class.vcxproj", "{6BBD30B2-5284-4F0D-992B-A8AAEF4249EC}"
 EndProject
 Global
@@ -15,14 +13,6 @@ Global
 		Release|x64 = Release|x64
 	EndGlobalSection
 	GlobalSection(ProjectConfigurationPlatforms) = postSolution
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Debug|Win32.ActiveCfg = Debug|Win32
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Debug|Win32.Build.0 = Debug|Win32
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Debug|x64.ActiveCfg = Debug|x64
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Debug|x64.Build.0 = Debug|x64
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Release|Win32.ActiveCfg = Release|Win32
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Release|Win32.Build.0 = Release|Win32
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Release|x64.ActiveCfg = Release|x64
-		{071AC43D-403D-4B2A-9DEF-B2DD247BF620}.Release|x64.Build.0 = Release|x64
 		{6BBD30B2-5284-4F0D-992B-A8AAEF4249EC}.Debug|Win32.ActiveCfg = Debug|Win32
 		{6BBD30B2-5284-4F0D-992B-A8AAEF4249EC}.Debug|Win32.Build.0 = Debug|Win32
 		{6BBD30B2-5284-4F0D-992B-A8AAEF4249EC}.Debug|x64.ActiveCfg = Debug|Win32

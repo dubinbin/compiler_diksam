@@ -1,38 +1,48 @@
-#include "stdafx.h"
 #include <string.h>
 #include "MEM.h"
 #include "DBG.h"
 #include "diksamc.h"
 #include "DVM_dev.h"
 
-DeclarationList* dkc_chain_declaration(DeclarationList *list, Declaration *decl){
-	DeclarationList *new_item;
-	DeclarationList *pos;
+DeclarationList *
+dkc_chain_declaration(DeclarationList *list, Declaration *decl)
+{
+    DeclarationList *new_item;
+    DeclarationList *pos;
 
-	new_item = dkc_malloc(sizeof(DeclarationList));
-	new_item->declaration = decl;
-	new_item->next = NULL;
-	if (list == NULL) {
-		return new_item;
-	}
-	for (pos = list; pos->next != NULL; pos = pos->next);
-	pos->next = new_item;
+    new_item = dkc_malloc(sizeof(DeclarationList));
+    new_item->declaration = decl;
+    new_item->next = NULL;
 
-	return list;
+    if (list == NULL) {
+        return new_item;
+    }
+
+    for (pos = list; pos->next != NULL; pos = pos->next)
+        ;
+    pos->next = new_item;
+
+    return list;
 }
 
-Declaration* dkc_alloc_declaration(TypeSpecifier *type, char *identifier){
+Declaration *
+dkc_alloc_declaration(DVM_Boolean is_final, TypeSpecifier *type,
+                      char *identifier)
+{
     Declaration *decl;
 
     decl = dkc_malloc(sizeof(Declaration));
     decl->name = identifier;
     decl->type = type;
+    decl->is_final = is_final;
     decl->variable_index = -1;
 
     return decl;
 }
 
-PackageName* dkc_create_package_name(char *identifier){
+PackageName *
+dkc_create_package_name(char *identifier)
+{
     PackageName *pn;
 
     pn = dkc_malloc(sizeof(PackageName));
@@ -42,39 +52,49 @@ PackageName* dkc_create_package_name(char *identifier){
     return pn;
 }
 
-PackageName* dkc_chain_package_name(PackageName *list, char *identifier){
+PackageName *
+dkc_chain_package_name(PackageName *list, char *identifier)
+{
     PackageName *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = dkc_create_package_name(identifier);
 
     return list;
 }
 
-RequireList* dkc_create_require_list(PackageName *package_name){
-	RequireList *rl;
-	DKC_Compiler *compiler;
-	char *current_package_name;
-	char *req_package_name;
+RequireList *
+dkc_create_require_list(PackageName *package_name)
+{
+    RequireList *rl;
+    DKC_Compiler *compiler;
+    char *current_package_name;
+    char *req_package_name;
 
-	compiler = dkc_get_current_compiler();
-	current_package_name = dkc_package_name_to_string(compiler->package_name);
-	req_package_name = dkc_package_name_to_string(package_name);
-	if (dvm_compare_string(req_package_name, current_package_name) && compiler->source_suffix == DKH_SOURCE) {
-		dkc_compile_error(compiler->current_line_number,
-			REQUIRE_ITSELF_ERR, MESSAGE_ARGUMENT_END);
-	}
-	MEM_free(current_package_name);
-	MEM_free(req_package_name);
-	rl = dkc_malloc(sizeof(RequireList));
-	rl->package_name = package_name;
-	rl->line_number = dkc_get_current_compiler()->current_line_number;
-	rl->next = NULL;
+    compiler = dkc_get_current_compiler();
 
-	return rl;
+    current_package_name = dkc_package_name_to_string(compiler->package_name);
+    req_package_name = dkc_package_name_to_string(package_name);
+    if (dvm_compare_string(req_package_name, current_package_name)
+        && compiler->source_suffix == DKH_SOURCE) {
+        dkc_compile_error(compiler->current_line_number,
+                          REQUIRE_ITSELF_ERR, MESSAGE_ARGUMENT_END);
+    }
+    MEM_free(current_package_name);
+    MEM_free(req_package_name);
+
+    rl = dkc_malloc(sizeof(RequireList));
+    rl->package_name = package_name;
+    rl->line_number = dkc_get_current_compiler()->current_line_number;
+    rl->next = NULL;
+
+    return rl;
 }
 
-RequireList* dkc_chain_require_list(RequireList *list, RequireList *add){
+RequireList *
+dkc_chain_require_list(RequireList *list, RequireList *add)
+{
     RequireList *pos;
     char buf[LINE_BUF_SIZE];
 
@@ -95,133 +115,164 @@ RequireList* dkc_chain_require_list(RequireList *list, RequireList *add){
     return list;
 }
 
-RenameList* dkc_create_rename_list(PackageName *package_name, char *identifier){
-	RenameList *rl;
-	PackageName *pre_tail;
-	PackageName *tail;
+RenameList *
+dkc_create_rename_list(PackageName *package_name, char *identifier)
+{
+    RenameList *rl;
+    PackageName *pre_tail;
+    PackageName *tail;
 
-	pre_tail = NULL;
-	for (tail = package_name; tail->next; tail = tail->next) {
-		pre_tail = tail;
-	}
-	if (pre_tail == NULL) {
-		dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-			RENAME_HAS_NO_PACKAGED_NAME_ERR,
-			MESSAGE_ARGUMENT_END);
-	}
-	pre_tail->next = NULL;
-	rl = dkc_malloc(sizeof(RenameList));
-	rl->package_name = package_name;
-	rl->original_name = tail->name;
-	rl->renamed_name = identifier;
-	rl->line_number = dkc_get_current_compiler()->current_line_number;
-	rl->next = NULL;
+    pre_tail = NULL;
+    for (tail = package_name; tail->next; tail = tail->next) {
+        pre_tail = tail;
+    }
+    if (pre_tail == NULL) {
+        dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                          RENAME_HAS_NO_PACKAGED_NAME_ERR,
+                          MESSAGE_ARGUMENT_END);
+    }
+    pre_tail->next = NULL;
 
-	return rl;
+    rl = dkc_malloc(sizeof(RenameList));
+    rl->package_name = package_name;
+    rl->original_name = tail->name;
+    rl->renamed_name = identifier;
+    rl->line_number = dkc_get_current_compiler()->current_line_number;
+    rl->next = NULL;
+
+    return rl;
 }
 
-RenameList* dkc_chain_rename_list(RenameList *list, RenameList *add){
+RenameList *
+dkc_chain_rename_list(RenameList *list, RenameList *add)
+{
     RenameList *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = add;
 
     return list;
 }
 
-static RequireList* add_default_package(RequireList *require_list){
-	RequireList *req_pos;
-	DVM_Boolean default_package_required = DVM_FALSE;
+static RequireList *
+add_default_package(RequireList *require_list)
+{
+    RequireList *req_pos;
+    DVM_Boolean default_package_required = DVM_FALSE;
 
-	for (req_pos = require_list; req_pos; req_pos = req_pos->next) {
-		char *temp_name = dkc_package_name_to_string(req_pos->package_name);
-		if (!strcmp(temp_name, DVM_DIKSAM_DEFAULT_PACKAGE)) {
-			default_package_required = DVM_TRUE;
-		}
-		MEM_free(temp_name);
-	}
-	if (!default_package_required) {
-		PackageName *pn;
-		RequireList *req_temp;
-		pn = dkc_create_package_name(DVM_DIKSAM_DEFAULT_PACKAGE_P1);
-		pn = dkc_chain_package_name(pn, DVM_DIKSAM_DEFAULT_PACKAGE_P2);
-		req_temp = require_list;
-		require_list = dkc_create_require_list(pn);
-		require_list->next = req_temp;
-	}
-	return require_list;
+    for (req_pos = require_list; req_pos; req_pos = req_pos->next) {
+        char *temp_name
+            = dkc_package_name_to_string(req_pos->package_name);
+        if (!strcmp(temp_name, DVM_DIKSAM_DEFAULT_PACKAGE)) {
+            default_package_required = DVM_TRUE;
+        }
+        MEM_free(temp_name);
+    }
+
+    if (!default_package_required) {
+        PackageName *pn;
+        RequireList *req_temp;
+
+        pn = dkc_create_package_name(DVM_DIKSAM_DEFAULT_PACKAGE_P1);
+        pn = dkc_chain_package_name(pn, DVM_DIKSAM_DEFAULT_PACKAGE_P2);
+        req_temp = require_list;
+        require_list = dkc_create_require_list(pn);
+        require_list->next = req_temp;
+    }
+    return require_list;
 }
 
-void dkc_set_require_and_rename_list(RequireList *require_list, RenameList *rename_list){
-	DKC_Compiler *compiler;
-	char *current_package_name;
+void
+dkc_set_require_and_rename_list(RequireList *require_list,
+                                RenameList *rename_list)
+{
+    DKC_Compiler *compiler;
+    char *current_package_name;
 
-	compiler = dkc_get_current_compiler();
-	current_package_name = dkc_package_name_to_string(compiler->package_name);
-	if (!dvm_compare_string(current_package_name, DVM_DIKSAM_DEFAULT_PACKAGE)) {
-		require_list = add_default_package(require_list);
-	}
-	MEM_free(current_package_name);
-	compiler->require_list = require_list;
-	compiler->rename_list = rename_list;
+    compiler = dkc_get_current_compiler();
+
+    current_package_name
+        = dkc_package_name_to_string(compiler->package_name);
+
+    if (!dvm_compare_string(current_package_name,
+                            DVM_DIKSAM_DEFAULT_PACKAGE)) {
+        require_list = add_default_package(require_list);
+    }
+    MEM_free(current_package_name);
+    compiler->require_list = require_list;
+    compiler->rename_list = rename_list;
 }
 
-// 向编译器函数链表中添加函数
-static void add_function_to_compiler(FunctionDefinition *fd){
-	DKC_Compiler *compiler;
-	FunctionDefinition *pos;
+static void
+add_function_to_compiler(FunctionDefinition *fd)
+{
+    DKC_Compiler *compiler;
+    FunctionDefinition *pos;
 
-	compiler = dkc_get_current_compiler();
-	if (compiler->function_list) {
-		for (pos = compiler->function_list; pos->next; pos = pos->next);
-		pos->next = fd;
-	}
-	else {
-		compiler->function_list = fd;
-	}
+    compiler = dkc_get_current_compiler();
+    if (compiler->function_list) {
+        for (pos = compiler->function_list; pos->next; pos = pos->next)
+            ;
+        pos->next = fd;
+    } else {
+        compiler->function_list = fd;
+    }
 }
 
-// 创建函数定义子函数
-FunctionDefinition* dkc_create_function_definition(TypeSpecifier *type, char *identifier, ParameterList *parameter_list, Block *block){
-	FunctionDefinition *fd;
-	DKC_Compiler *compiler;
+FunctionDefinition *
+dkc_create_function_definition(TypeSpecifier *type, char *identifier,
+                               ParameterList *parameter_list,
+                               ExceptionList *throws, Block *block)
+{
+    FunctionDefinition *fd;
+    DKC_Compiler *compiler;
 
-	compiler = dkc_get_current_compiler();
-	fd = dkc_malloc(sizeof(FunctionDefinition));
-	fd->type = type;
-	fd->package_name = compiler->package_name;
-	fd->name = identifier;
-	fd->parameter = parameter_list;
-	fd->block = block;
-	fd->local_variable_count = 0;
-	fd->local_variable = NULL;
-	fd->class_definition = NULL;
-	fd->end_line_number = compiler->current_line_number;
-	fd->next = NULL;
-	if (block) {
-		block->type = FUNCTION_BLOCK;
-		block->parent.function.function = fd;
-	}
-	add_function_to_compiler(fd);
+    compiler = dkc_get_current_compiler();
 
-	return fd;
+    fd = dkc_malloc(sizeof(FunctionDefinition));
+    fd->type = type;
+    fd->package_name = compiler->package_name;
+    fd->name = identifier;
+    fd->parameter = parameter_list;
+    fd->block = block;
+    fd->local_variable_count = 0;
+    fd->local_variable = NULL;
+    fd->class_definition = NULL;
+    fd->throws = throws;
+    fd->end_line_number = compiler->current_line_number;
+    fd->next = NULL;
+    if (block) {
+        block->type = FUNCTION_BLOCK;
+        block->parent.function.function = fd;
+    }
+    add_function_to_compiler(fd);
+
+    return fd;
 }
 
-// 创建函数定义
-void dkc_function_define(TypeSpecifier *type, char *identifier, ParameterList *parameter_list, Block *block){
-	FunctionDefinition *fd;
+void
+dkc_function_define(TypeSpecifier *type, char *identifier,
+                    ParameterList *parameter_list, ExceptionList *throws,
+                    Block *block)
+{
+    FunctionDefinition *fd;
 
-	if (dkc_search_function(identifier) || dkc_search_declaration(identifier, NULL)) {
-		dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-			FUNCTION_MULTIPLE_DEFINE_ERR,
-			STRING_MESSAGE_ARGUMENT, "name", identifier,
-			MESSAGE_ARGUMENT_END);
-		return;
-	}
-	fd = dkc_create_function_definition(type, identifier, parameter_list, block);
+    if (dkc_search_function(identifier)
+        || dkc_search_declaration(identifier, NULL)) {
+        dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                          FUNCTION_MULTIPLE_DEFINE_ERR,
+                          STRING_MESSAGE_ARGUMENT, "name", identifier,
+                          MESSAGE_ARGUMENT_END);
+        return;
+    }
+    fd = dkc_create_function_definition(type, identifier, parameter_list,
+                                        throws, block);
 }
 
-ParameterList* dkc_create_parameter(TypeSpecifier *type, char *identifier){
+ParameterList *
+dkc_create_parameter(TypeSpecifier *type, char *identifier)
+{
     ParameterList       *p;
 
     p = dkc_malloc(sizeof(ParameterList));
@@ -233,16 +284,22 @@ ParameterList* dkc_create_parameter(TypeSpecifier *type, char *identifier){
     return p;
 }
 
-ParameterList* dkc_chain_parameter(ParameterList *list, TypeSpecifier *type,char *identifier){
+ParameterList *
+dkc_chain_parameter(ParameterList *list, TypeSpecifier *type,
+                    char *identifier)
+{
     ParameterList *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = dkc_create_parameter(type, identifier);
 
     return list;
 }
 
-ArgumentList* dkc_create_argument_list(Expression *expression){
+ArgumentList *
+dkc_create_argument_list(Expression *expression)
+{
     ArgumentList *al;
 
     al = dkc_malloc(sizeof(ArgumentList));
@@ -252,16 +309,21 @@ ArgumentList* dkc_create_argument_list(Expression *expression){
     return al;
 }
 
-ArgumentList* dkc_chain_argument_list(ArgumentList *list, Expression *expr){
+ArgumentList *
+dkc_chain_argument_list(ArgumentList *list, Expression *expr)
+{
     ArgumentList *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = dkc_create_argument_list(expr);
 
     return list;
 }
 
-ExpressionList* dkc_create_expression_list(Expression *expression){
+ExpressionList *
+dkc_create_expression_list(Expression *expression)
+{
     ExpressionList *el;
 
     el = dkc_malloc(sizeof(ExpressionList));
@@ -271,16 +333,21 @@ ExpressionList* dkc_create_expression_list(Expression *expression){
     return el;
 }
 
-ExpressionList* dkc_chain_expression_list(ExpressionList *list, Expression *expr){
+ExpressionList *
+dkc_chain_expression_list(ExpressionList *list, Expression *expr)
+{
     ExpressionList *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = dkc_create_expression_list(expr);
 
     return list;
 }
 
-StatementList* dkc_create_statement_list(Statement *statement){
+StatementList *
+dkc_create_statement_list(Statement *statement)
+{
     StatementList *sl;
 
     sl = dkc_malloc(sizeof(StatementList));
@@ -290,19 +357,25 @@ StatementList* dkc_create_statement_list(Statement *statement){
     return sl;
 }
 
-StatementList* dkc_chain_statement_list(StatementList *list, Statement *statement){
-	StatementList *pos;
+StatementList *
+dkc_chain_statement_list(StatementList *list, Statement *statement)
+{
+    StatementList *pos;
 
-	if (list == NULL)
-		return dkc_create_statement_list(statement);
-	for (pos = list; pos->next; pos = pos->next);
-	pos->next = dkc_create_statement_list(statement);
+    if (list == NULL)
+        return dkc_create_statement_list(statement);
 
-	return list;
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = dkc_create_statement_list(statement);
+
+    return list;
 }
 
-// 创建类型指定器
-TypeSpecifier* dkc_create_type_specifier(DVM_BasicType basic_type){
+
+TypeSpecifier *
+dkc_create_type_specifier(DVM_BasicType basic_type)
+{
     TypeSpecifier *type;
 
     type = dkc_alloc_type_specifier(basic_type);
@@ -311,37 +384,41 @@ TypeSpecifier* dkc_create_type_specifier(DVM_BasicType basic_type){
     return type;
 }
 
-// 创建类类型类型指定器
-TypeSpecifier* dkc_create_class_type_specifier(char *identifier){
+TypeSpecifier *
+dkc_create_identifier_type_specifier(char *identifier)
+{
     TypeSpecifier *type;
 
-    type = dkc_alloc_type_specifier(DVM_CLASS_TYPE);
-    type->Class_ref.identifier = identifier;
-    type->Class_ref.class_definition = NULL;
+    type = dkc_alloc_type_specifier(DVM_UNSPECIFIED_IDENTIFIER_TYPE);
+    type->identifier = identifier;
     type->line_number = dkc_get_current_compiler()->current_line_number;
 
     return type;
 }
 
-// 创建一个数组类型的类型指定器，将其加入到参数指定的类型指定器继承链表的尾部
-TypeSpecifier* dkc_create_array_type_specifier(TypeSpecifier *base){
-	TypeDerive *new_derive;
+TypeSpecifier *
+dkc_create_array_type_specifier(TypeSpecifier *base)
+{
+    TypeDerive *new_derive;
+    
+    new_derive = dkc_alloc_type_derive(ARRAY_DERIVE);
 
-	new_derive = dkc_alloc_type_derive(ARRAY_DERIVE);
-	if (base->derive == NULL) {
-		base->derive = new_derive;
-	}
-	else {
-		TypeDerive *derive_p;
-		for (derive_p = base->derive; derive_p->next != NULL; derive_p = derive_p->next);
-		derive_p->next = new_derive;
-	}
+    if (base->derive == NULL) {
+        base->derive = new_derive;
+    } else {
+        TypeDerive *derive_p;
+        for (derive_p = base->derive; derive_p->next != NULL;
+             derive_p = derive_p->next)
+            ;
+        derive_p->next = new_derive;
+    }
 
-	return base;
+    return base;
 }
 
-// 根据参数指定表达式类型分配表达式内存空间
-Expression* dkc_alloc_expression(ExpressionKind kind){
+Expression *
+dkc_alloc_expression(ExpressionKind kind)
+{
     Expression  *exp;
 
     exp = dkc_malloc(sizeof(Expression));
@@ -352,7 +429,9 @@ Expression* dkc_alloc_expression(ExpressionKind kind){
     return exp;
 }
 
-Expression* dkc_create_comma_expression(Expression *left, Expression *right){
+Expression *
+dkc_create_comma_expression(Expression *left, Expression *right)
+{
     Expression *exp;
 
     exp = dkc_alloc_expression(COMMA_EXPRESSION);
@@ -362,7 +441,10 @@ Expression* dkc_create_comma_expression(Expression *left, Expression *right){
     return exp;
 }
 
-Expression* dkc_create_assign_expression(Expression *left, AssignmentOperator operator,Expression *operand){
+Expression *
+dkc_create_assign_expression(Expression *left, AssignmentOperator operator,
+                             Expression *operand)
+{
     Expression *exp;
 
     exp = dkc_alloc_expression(ASSIGN_EXPRESSION);
@@ -373,7 +455,10 @@ Expression* dkc_create_assign_expression(Expression *left, AssignmentOperator op
     return exp;
 }
 
-Expression* dkc_create_binary_expression(ExpressionKind operator,Expression *left, Expression *right){
+Expression *
+dkc_create_binary_expression(ExpressionKind operator,
+                             Expression *left, Expression *right)
+{
     Expression *exp;
     exp = dkc_alloc_expression(operator);
     exp->u.binary_expression.left = left;
@@ -381,14 +466,18 @@ Expression* dkc_create_binary_expression(ExpressionKind operator,Expression *lef
     return exp;
 }
 
-Expression* dkc_create_minus_expression(Expression *operand){
+Expression *
+dkc_create_minus_expression(Expression *operand)
+{
     Expression  *exp;
     exp = dkc_alloc_expression(MINUS_EXPRESSION);
     exp->u.minus_expression = operand;
     return exp;
 }
 
-Expression* dkc_create_logical_not_expression(Expression *operand){
+Expression *
+dkc_create_logical_not_expression(Expression *operand)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(LOGICAL_NOT_EXPRESSION);
@@ -397,7 +486,19 @@ Expression* dkc_create_logical_not_expression(Expression *operand){
     return exp;
 }
 
-Expression* dkc_create_index_expression(Expression *array, Expression *index)
+Expression *
+dkc_create_bit_not_expression(Expression *operand)
+{
+    Expression  *exp;
+
+    exp = dkc_alloc_expression(BIT_NOT_EXPRESSION);
+    exp->u.bit_not = operand;
+
+    return exp;
+}
+
+Expression *
+dkc_create_index_expression(Expression *array, Expression *index)
 {
     Expression *exp;
 
@@ -408,7 +509,9 @@ Expression* dkc_create_index_expression(Expression *array, Expression *index)
     return exp;
 }
 
-Expression* dkc_create_incdec_expression(Expression *operand, ExpressionKind inc_or_dec){
+Expression *
+dkc_create_incdec_expression(Expression *operand, ExpressionKind inc_or_dec)
+{
     Expression *exp;
 
     exp = dkc_alloc_expression(inc_or_dec);
@@ -417,7 +520,9 @@ Expression* dkc_create_incdec_expression(Expression *operand, ExpressionKind inc
     return exp;
 }
 
-Expression* dkc_create_instanceof_expression(Expression *operand, TypeSpecifier *type){
+Expression *
+dkc_create_instanceof_expression(Expression *operand, TypeSpecifier *type)
+{
     Expression *exp;
 
     exp = dkc_alloc_expression(INSTANCEOF_EXPRESSION);
@@ -427,7 +532,9 @@ Expression* dkc_create_instanceof_expression(Expression *operand, TypeSpecifier 
     return exp;
 }
 
-Expression* dkc_create_identifier_expression(char *identifier){
+Expression *
+dkc_create_identifier_expression(char *identifier)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(IDENTIFIER_EXPRESSION);
@@ -436,7 +543,10 @@ Expression* dkc_create_identifier_expression(char *identifier){
     return exp;
 }
 
-Expression* dkc_create_function_call_expression(Expression *function,ArgumentList *argument){
+Expression *
+dkc_create_function_call_expression(Expression *function,
+                                    ArgumentList *argument)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(FUNCTION_CALL_EXPRESSION);
@@ -446,8 +556,9 @@ Expression* dkc_create_function_call_expression(Expression *function,ArgumentLis
     return exp;
 }
 
-// 创建向下转型表达式
-Expression* dkc_create_down_cast_expression(Expression *operand, TypeSpecifier *type){
+Expression *
+dkc_create_down_cast_expression(Expression *operand, TypeSpecifier *type)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(DOWN_CAST_EXPRESSION);
@@ -457,7 +568,9 @@ Expression* dkc_create_down_cast_expression(Expression *operand, TypeSpecifier *
     return exp;
 }
 
-Expression* dkc_create_member_expression(Expression *expression, char *member_name){
+Expression *
+dkc_create_member_expression(Expression *expression, char *member_name)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(MEMBER_EXPRESSION);
@@ -468,7 +581,9 @@ Expression* dkc_create_member_expression(Expression *expression, char *member_na
 }
 
 
-Expression* dkc_create_boolean_expression(DVM_Boolean value){
+Expression *
+dkc_create_boolean_expression(DVM_Boolean value)
+{
     Expression *exp;
 
     exp = dkc_alloc_expression(BOOLEAN_EXPRESSION);
@@ -477,7 +592,9 @@ Expression* dkc_create_boolean_expression(DVM_Boolean value){
     return exp;
 }
 
-Expression* dkc_create_null_expression(void){
+Expression *
+dkc_create_null_expression(void)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(NULL_EXPRESSION);
@@ -485,7 +602,9 @@ Expression* dkc_create_null_expression(void){
     return exp;
 }
 
-Expression* dkc_create_this_expression(void){
+Expression *
+dkc_create_this_expression(void)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(THIS_EXPRESSION);
@@ -493,7 +612,9 @@ Expression* dkc_create_this_expression(void){
     return exp;
 }
 
-Expression* dkc_create_super_expression(void){
+Expression *
+dkc_create_super_expression(void)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(SUPER_EXPRESSION);
@@ -501,21 +622,25 @@ Expression* dkc_create_super_expression(void){
     return exp;
 }
 
-Expression* dkc_create_new_expression(char *class_name, char *method_name, ArgumentList *argument){
-	Expression *exp;
+Expression *
+dkc_create_new_expression(char *class_name, char *method_name,
+                          ArgumentList *argument)
+{
+    Expression *exp;
 
-	exp = dkc_alloc_expression(NEW_EXPRESSION);
-	exp->u.new_e.class_name = class_name;
-	exp->u.new_e.class_definition = NULL;
-	exp->u.new_e.method_name = method_name;
-	exp->u.new_e.method_declaration = NULL;
-	exp->u.new_e.argument = argument;
+    exp = dkc_alloc_expression(NEW_EXPRESSION);
+    exp->u.new_e.class_name = class_name;
+    exp->u.new_e.class_definition = NULL;
+    exp->u.new_e.method_name = method_name;
+    exp->u.new_e.method_declaration = NULL;
+    exp->u.new_e.argument = argument;
 
-	return exp;
+    return exp;
 }
 
-// 创建数组字面值链表表达式
-Expression* dkc_create_array_literal_expression(ExpressionList *list){
+Expression *
+dkc_create_array_literal_expression(ExpressionList *list)
+{
     Expression  *exp;
 
     exp = dkc_alloc_expression(ARRAY_LITERAL_EXPRESSION);
@@ -524,30 +649,38 @@ Expression* dkc_create_array_literal_expression(ExpressionList *list){
     return exp;
 }
 
-// 创建基本的数组创建形式
-Expression* dkc_create_basic_array_creation(DVM_BasicType basic_type, ArrayDimension *dim_expr_list, ArrayDimension *dim_list){
-	Expression  *exp;
-	TypeSpecifier *type;
+Expression *
+dkc_create_basic_array_creation(DVM_BasicType basic_type,
+                                ArrayDimension *dim_expr_list,
+                                ArrayDimension *dim_list)
+{
+    Expression  *exp;
+    TypeSpecifier *type;
 
-	type = dkc_create_type_specifier(basic_type);
-	exp = dkc_create_class_array_creation(type, dim_expr_list, dim_list);
+    type = dkc_create_type_specifier(basic_type);
+    exp = dkc_create_class_array_creation(type, dim_expr_list, dim_list);
 
-	return exp;
+    return exp;
 }
 
-// 创建类数组的创建形式
-Expression* dkc_create_class_array_creation(TypeSpecifier *type, ArrayDimension *dim_expr_list, ArrayDimension *dim_list){
-	Expression  *exp;
+Expression *
+dkc_create_class_array_creation(TypeSpecifier *type,
+                                ArrayDimension *dim_expr_list,
+                                ArrayDimension *dim_list)
+{
+    Expression  *exp;
 
-	exp = dkc_alloc_expression(ARRAY_CREATION_EXPRESSION);
-	exp->u.array_creation.type = type;
-	exp->u.array_creation.dimension = dkc_chain_array_dimension(dim_expr_list, dim_list);
+    exp = dkc_alloc_expression(ARRAY_CREATION_EXPRESSION);
+    exp->u.array_creation.type = type;
+    exp->u.array_creation.dimension
+        = dkc_chain_array_dimension(dim_expr_list, dim_list);
 
-	return exp;
+    return exp;
 }
 
-// 创建数组维数链表节点
-ArrayDimension* dkc_create_array_dimension(Expression *expr){
+ArrayDimension *
+dkc_create_array_dimension(Expression *expr)
+{
     ArrayDimension *dim;
 
     dim = dkc_malloc(sizeof(ArrayDimension));
@@ -557,17 +690,21 @@ ArrayDimension* dkc_create_array_dimension(Expression *expr){
     return dim;
 }
 
-// 将数组维数节点插入到数组维数链表的尾部
-ArrayDimension* dkc_chain_array_dimension(ArrayDimension *list, ArrayDimension *dim){
+ArrayDimension *
+dkc_chain_array_dimension(ArrayDimension *list, ArrayDimension *dim)
+{
     ArrayDimension *pos;
 
-    for (pos = list; pos->next != NULL; pos = pos->next);
+    for (pos = list; pos->next != NULL; pos = pos->next)
+        ;
     pos->next = dim;
 
     return list;
 }
 
-Statement* dkc_alloc_statement(StatementType type){
+Statement *
+dkc_alloc_statement(StatementType type)
+{
     Statement *st;
 
     st = dkc_malloc(sizeof(Statement));
@@ -577,82 +714,140 @@ Statement* dkc_alloc_statement(StatementType type){
     return st;
 }
 
-Statement* dkc_create_if_statement(Expression *condition, Block *then_block, Elsif *elsif_list, Block *else_block){
-	Statement *st;
+Statement *
+dkc_create_if_statement(Expression *condition,
+                        Block *then_block, Elsif *elsif_list,
+                        Block *else_block)
+{
+    Statement *st;
 
-	st = dkc_alloc_statement(IF_STATEMENT);
-	st->u.if_s.condition = condition;
-	st->u.if_s.then_block = then_block;
-	st->u.if_s.elsif_list = elsif_list;
-	st->u.if_s.else_block = else_block;
+    st = dkc_alloc_statement(IF_STATEMENT);
+    st->u.if_s.condition = condition;
+    st->u.if_s.then_block = then_block;
+    st->u.if_s.elsif_list = elsif_list;
+    st->u.if_s.else_block = else_block;
 
-	return st;
+    return st;
 }
 
-Elsif* dkc_chain_elsif_list(Elsif *list, Elsif *add){
+Elsif *
+dkc_chain_elsif_list(Elsif *list, Elsif *add)
+{
     Elsif *pos;
 
-    for (pos = list; pos->next; pos = pos->next);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
     pos->next = add;
 
     return list;
 }
 
-// 创建elsif链表的节点并返回该节点
-Elsif* dkc_create_elsif(Expression *expr, Block *block){
-	Elsif *ei;
+Elsif *
+dkc_create_elsif(Expression *expr, Block *block)
+{
+    Elsif *ei;
 
-	ei = dkc_malloc(sizeof(Elsif));
-	ei->condition = expr;
-	ei->block = block;
-	ei->next = NULL;
+    ei = dkc_malloc(sizeof(Elsif));
+    ei->condition = expr;
+    ei->block = block;
+    ei->next = NULL;
 
-	return ei;
+    return ei;
 }
 
-Statement* dkc_create_while_statement(char *label, Expression *condition, Block *block){
-	Statement *st;
+Statement *
+dkc_create_switch_statement(Expression *expression,
+                            CaseList *case_list, Block *default_block)
+{
+    Statement *st;
 
-	st = dkc_alloc_statement(WHILE_STATEMENT);
-	st->u.while_s.label = label;
-	st->u.while_s.condition = condition;
-	st->u.while_s.block = block;
-	block->type = WHILE_STATEMENT_BLOCK;
-	block->parent.statement.statement = st;
+    st = dkc_alloc_statement(SWITCH_STATEMENT);
+    st->u.switch_s.expression = expression;
+    st->u.switch_s.case_list = case_list;
+    st->u.switch_s.default_block = default_block;
 
-	return st;
+    return st;
 }
 
-Statement* dkc_create_for_statement(char *label, Expression *init, Expression *cond, Expression *post, Block *block){
-	Statement *st;
+CaseList *
+dkc_create_one_case(ExpressionList *expression_list, Block *block)
+{
+    CaseList *case_list;
 
-	st = dkc_alloc_statement(FOR_STATEMENT);
-	st->u.for_s.label = label;
-	st->u.for_s.init = init;
-	st->u.for_s.condition = cond;
-	st->u.for_s.post = post;
-	st->u.for_s.block = block;
-	block->type = FOR_STATEMENT_BLOCK;
-	block->parent.statement.statement = st;
+    case_list = dkc_malloc(sizeof(CaseList));
+    case_list->expression_list = expression_list;
+    case_list->block = block;
+    case_list->next = NULL;
 
-	return st;
+    return case_list;
 }
 
-Statement* dkc_create_do_while_statement(char *label, Block *block, Expression *condition){
-	Statement *st;
+CaseList *
+dkc_chain_case(CaseList *list, CaseList *add)
+{
+    CaseList *pos;
 
-	st = dkc_alloc_statement(DO_WHILE_STATEMENT);
-	st->u.do_while_s.label = label;
-	st->u.do_while_s.block = block;
-	st->u.do_while_s.condition = condition;
-	block->type = DO_WHILE_STATEMENT_BLOCK;
-	// 该语句块的父语句为该语句
-	block->parent.statement.statement = st;
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = add;
 
-	return st;
+    return list;
 }
 
-Statement* dkc_create_foreach_statement(char *label, char *variable,Expression *collection, Block *block){
+Statement *
+dkc_create_while_statement(char *label,
+                           Expression *condition, Block *block)
+{
+    Statement *st;
+
+    st = dkc_alloc_statement(WHILE_STATEMENT);
+    st->u.while_s.label = label;
+    st->u.while_s.condition = condition;
+    st->u.while_s.block = block;
+    block->type = WHILE_STATEMENT_BLOCK;
+    block->parent.statement.statement = st;
+
+    return st;
+}
+
+Statement *
+dkc_create_for_statement(char *label, Expression *init, Expression *cond,
+                         Expression *post, Block *block)
+{
+    Statement *st;
+
+    st = dkc_alloc_statement(FOR_STATEMENT);
+    st->u.for_s.label = label;
+    st->u.for_s.init = init;
+    st->u.for_s.condition = cond;
+    st->u.for_s.post = post;
+    st->u.for_s.block = block;
+    block->type = FOR_STATEMENT_BLOCK;
+    block->parent.statement.statement = st;
+
+    return st;
+}
+
+Statement *
+dkc_create_do_while_statement(char *label, Block *block,
+                              Expression *condition)
+{
+    Statement *st;
+
+    st = dkc_alloc_statement(DO_WHILE_STATEMENT);
+    st->u.do_while_s.label = label;
+    st->u.do_while_s.block = block;
+    st->u.do_while_s.condition = condition;
+    block->type = DO_WHILE_STATEMENT_BLOCK;
+    block->parent.statement.statement = st;
+
+    return st;
+}
+
+Statement *
+dkc_create_foreach_statement(char *label, char *variable,
+                             Expression *collection, Block *block)
+{
     Statement *st;
 
     st = dkc_alloc_statement(FOREACH_STATEMENT);
@@ -664,7 +859,9 @@ Statement* dkc_create_foreach_statement(char *label, char *variable,Expression *
     return st;
 }
 
-Block* dkc_alloc_block(void){
+Block *
+dkc_alloc_block(void)
+{
     Block *new_block;
 
     new_block = dkc_malloc(sizeof(Block));
@@ -676,8 +873,9 @@ Block* dkc_alloc_block(void){
     return new_block;
 }
 
-// 开启一个新的语句块，该语句块的上层语句块为编译器当前语句块，并将当前编译器的语句块设为该语句块
-Block* dkc_open_block(void){
+Block *
+dkc_open_block(void)
+{
     Block *new_block;
 
     DKC_Compiler *compiler = dkc_get_current_compiler();
@@ -688,19 +886,22 @@ Block* dkc_open_block(void){
     return new_block;
 }
 
-// 结束语句块，并将编译器当前语句块设定为此语句块的上一级语句块
-Block* dkc_close_block(Block *block, StatementList *statement_list){
-	DKC_Compiler *compiler = dkc_get_current_compiler();
+Block *
+dkc_close_block(Block *block, StatementList *statement_list)
+{
+    DKC_Compiler *compiler = dkc_get_current_compiler();
 
-	DBG_assert(block == compiler->current_block, ("block mismatch.\n"));
-	block->statement_list = statement_list;
-	compiler->current_block = block->outer_block;
+    DBG_assert(block == compiler->current_block,
+               ("block mismatch.\n"));
+    block->statement_list = statement_list;
+    compiler->current_block = block->outer_block;
 
-	return block;
+    return block;
 }
 
-// 创建表达式语句
-Statement* dkc_create_expression_statement(Expression *expression){
+Statement *
+dkc_create_expression_statement(Expression *expression)
+{
     Statement *st;
 
     st = dkc_alloc_statement(EXPRESSION_STATEMENT);
@@ -709,7 +910,9 @@ Statement* dkc_create_expression_statement(Expression *expression){
     return st;
 }
 
-Statement* dkc_create_return_statement(Expression *expression){
+Statement *
+dkc_create_return_statement(Expression *expression)
+{
     Statement *st;
 
     st = dkc_alloc_statement(RETURN_STATEMENT);
@@ -718,7 +921,9 @@ Statement* dkc_create_return_statement(Expression *expression){
     return st;
 }
 
-Statement* dkc_create_break_statement(char *label){
+Statement *
+dkc_create_break_statement(char *label)
+{
     Statement *st;
 
     st = dkc_alloc_statement(BREAK_STATEMENT);
@@ -727,91 +932,197 @@ Statement* dkc_create_break_statement(char *label){
     return st;
 }
 
-Statement* dkc_create_continue_statement(char *label){
-	Statement *st;
+Statement *
+dkc_create_continue_statement(char *label)
+{
+    Statement *st;
 
-	st = dkc_alloc_statement(CONTINUE_STATEMENT);
-	st->u.continue_s.label = label;
+    st = dkc_alloc_statement(CONTINUE_STATEMENT);
+    st->u.continue_s.label = label;
 
-	return st;
+    return st;
 }
 
-// 创建声明语句，声明语句允许初始化表达式
-Statement* dkc_create_declaration_statement(TypeSpecifier *type, char *identifier, Expression *initializer){
-	Statement *st;
-	Declaration *decl;
+Statement *
+dkc_create_try_statement(Block *try_block,
+                         CatchClause *catch_clause,
+                         Block *finally_block)
+{
+    Statement *st;
 
-	st = dkc_alloc_statement(DECLARATION_STATEMENT);
-	decl = dkc_alloc_declaration(type, identifier);
-	decl->initializer = initializer;
-	st->u.declaration_s = decl;
+    st = dkc_alloc_statement(TRY_STATEMENT);
+    st->u.try_s.try_block = try_block;
+    try_block->type = TRY_CLAUSE_BLOCK;
+    st->u.try_s.catch_clause = catch_clause;
+    if (finally_block) {
+        finally_block->type = FINALLY_CLAUSE_BLOCK;
+    }
+    st->u.try_s.finally_block = finally_block;
 
-	return st;
+    return st;
 }
 
-// 转换访问修饰符
-DVM_AccessModifier conv_access_modifier(ClassOrMemberModifierKind src){
-	if (src == PUBLIC_MODIFIER) {
-		return DVM_PUBLIC_ACCESS;
-	}
-	else if (src == PRIVATE_MODIFIER) {
-		return DVM_PRIVATE_ACCESS;
-	}
-	else {
-		DBG_assert(src == NOT_SPECIFIED_MODIFIER, ("src..%d\n", src));
-		return DVM_FILE_ACCESS;
-	}
+CatchClause *
+dkc_create_catch_clause(TypeSpecifier *type, char *variable_name,
+                        Block *block)
+{
+    CatchClause *cc;
+
+    cc = dkc_malloc(sizeof(CatchClause));
+    cc->type = type;
+    cc->variable_name = variable_name;
+    cc->block = block;
+    block->type = CATCH_CLAUSE_BLOCK;
+    cc->next = NULL;
+
+    return cc;
 }
 
-// 开始类定义，并将当前编译器的当前类定义指向这个类
-void dkc_start_class_definition(ClassOrMemberModifierList *modifier, DVM_ClassOrInterface class_or_interface, char *identifier, ExtendsList *extends){
-	ClassDefinition *cd;
-	DKC_Compiler *compiler = dkc_get_current_compiler();
+CatchClause *
+dkc_start_catch_clause(void)
+{
+    CatchClause *cc;
 
-	cd = dkc_malloc(sizeof(ClassDefinition));
-	cd->is_abstract = (class_or_interface == DVM_INTERFACE_DEFINITION);
-	cd->access_modifier = DVM_FILE_ACCESS;
-	if (modifier) {
-		if (modifier->is_abstract == ABSTRACT_MODIFIER) {
-			cd->is_abstract = DVM_TRUE;
-		}
-		cd->access_modifier = conv_access_modifier(modifier->access_modifier);
-	}
-	cd->class_or_interface = class_or_interface;
-	cd->package_name = compiler->package_name;
-	cd->name = identifier;
-	cd->extends = extends;
-	cd->super_class = NULL;
-	cd->interface_list = NULL;
-	cd->member = NULL;
-	cd->next = NULL;
-	cd->line_number = compiler->current_line_number;
-	DBG_assert(compiler->current_class_definition == NULL, ("current_class_definition is not NULL."));
-	compiler->current_class_definition = cd;
+    cc = dkc_malloc(sizeof(CatchClause));
+    cc->line_number = dkc_get_current_compiler()->current_line_number;
+    cc->next = NULL;
+
+    return cc;
 }
 
-// 创建类的定义并将其插入到当前编译器的类定义链表中
-void dkc_class_define(MemberDeclaration *member_list){
-	DKC_Compiler *compiler;
-	ClassDefinition *cd;
-	ClassDefinition *pos;
+CatchClause *
+dkc_end_catch_clause(CatchClause *catch_clause, TypeSpecifier *type,
+                     char *variable_name, Block *block)
+{
+    catch_clause->type = type;
+    catch_clause->variable_name = variable_name;
+    catch_clause->block = block;
 
-	compiler = dkc_get_current_compiler();
-	cd = compiler->current_class_definition;
-	DBG_assert(cd != NULL, ("current_class_definition is NULL."));
-	if (compiler->class_definition_list == NULL) {
-		compiler->class_definition_list = cd;
-	}
-	else {
-		for (pos = compiler->class_definition_list; pos->next; pos = pos->next);
-		pos->next = cd;
-	}
-	cd->member = member_list;
-	compiler->current_class_definition = NULL;
+    return catch_clause;
 }
 
-// 创建扩展链表
-ExtendsList* dkc_create_extends_list(char *identifier){
+CatchClause *
+dkc_chain_catch_list(CatchClause *list, CatchClause *add)
+{
+    CatchClause *pos;
+
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = add;
+
+    return list;
+}
+
+
+Statement *
+dkc_create_throw_statement(Expression *expression)
+{
+    Statement *st;
+
+    st = dkc_alloc_statement(THROW_STATEMENT);
+    st->u.throw_s.exception = expression;
+
+    return st;
+}
+
+Statement *
+dkc_create_declaration_statement(DVM_Boolean is_final, TypeSpecifier *type,
+                                 char *identifier,
+                                 Expression *initializer)
+{
+    Statement *st;
+    Declaration *decl;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+
+    if (is_final && initializer == NULL) {
+        dkc_compile_error(compiler->current_line_number,
+                          FINAL_VARIABLE_WITHOUT_INITIALIZER_ERR,
+                          STRING_MESSAGE_ARGUMENT, "name", identifier,
+                          MESSAGE_ARGUMENT_END);
+    }
+    st = dkc_alloc_statement(DECLARATION_STATEMENT);
+
+    decl = dkc_alloc_declaration(is_final, type, identifier);
+
+    decl->initializer = initializer;
+
+    st->u.declaration_s = decl;
+
+    return st;
+}
+
+DVM_AccessModifier
+conv_access_modifier(ClassOrMemberModifierKind src)
+{
+    if (src == PUBLIC_MODIFIER) {
+        return DVM_PUBLIC_ACCESS;
+    } else if (src == PRIVATE_MODIFIER) {
+        return DVM_PRIVATE_ACCESS;
+    } else {
+        DBG_assert(src == NOT_SPECIFIED_MODIFIER, ("src..%d\n", src));
+        return DVM_FILE_ACCESS;
+    }
+}
+
+void
+dkc_start_class_definition(ClassOrMemberModifierList *modifier,
+                           DVM_ClassOrInterface class_or_interface,
+                           char *identifier,
+                           ExtendsList *extends)
+{
+    ClassDefinition *cd;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+
+    cd = dkc_malloc(sizeof(ClassDefinition));
+
+    cd->is_abstract = (class_or_interface == DVM_INTERFACE_DEFINITION);
+    cd->access_modifier = DVM_FILE_ACCESS;
+    if (modifier) {
+        if (modifier->is_abstract == ABSTRACT_MODIFIER) {
+            cd->is_abstract = DVM_TRUE;
+        }
+        cd->access_modifier = conv_access_modifier(modifier->access_modifier);
+    }
+    cd->class_or_interface = class_or_interface;
+    cd->package_name = compiler->package_name;
+    cd->name = identifier;
+    cd->extends = extends;
+    cd->super_class = NULL;
+    cd->interface_list = NULL;
+    cd->member = NULL;
+    cd->next = NULL;
+    cd->line_number = compiler->current_line_number;
+
+    DBG_assert(compiler->current_class_definition == NULL,
+               ("current_class_definition is not NULL."));
+    compiler->current_class_definition = cd;
+}
+
+void dkc_class_define(MemberDeclaration *member_list)
+{
+    DKC_Compiler *compiler;
+    ClassDefinition *cd;
+    ClassDefinition *pos;
+
+    compiler = dkc_get_current_compiler();
+    cd = compiler->current_class_definition;
+    DBG_assert(cd != NULL, ("current_class_definition is NULL."));
+
+    if (compiler->class_definition_list == NULL) {
+        compiler->class_definition_list = cd;
+    } else {
+        for (pos = compiler->class_definition_list; pos->next;
+             pos = pos->next)
+            ;
+        pos->next = cd;
+    }
+    cd->member = member_list;
+    compiler->current_class_definition = NULL;
+}
+
+ExtendsList *
+dkc_create_extends_list(char *identifier)
+{
     ExtendsList *list;
 
     list = dkc_malloc(sizeof(ExtendsList));
@@ -822,190 +1133,359 @@ ExtendsList* dkc_create_extends_list(char *identifier){
     return list;
 }
 
-ExtendsList* dkc_chain_extends_list(ExtendsList *list, char *add){
-	ExtendsList *pos;
+ExtendsList *
+dkc_chain_extends_list(ExtendsList *list, char *add)
+{
+    ExtendsList *pos;
 
-	for (pos = list; pos->next; pos = pos->next);
-	pos->next = dkc_create_extends_list(add);
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = dkc_create_extends_list(add);
 
-	return list;
+    return list;
 }
 
-// 根据参数描述的类或者方法描述符种类创建修饰符并返回
-ClassOrMemberModifierList dkc_create_class_or_member_modifier(ClassOrMemberModifierKind modifier){
-	ClassOrMemberModifierList ret;
+ClassOrMemberModifierList
+dkc_create_class_or_member_modifier(ClassOrMemberModifierKind modifier)
+{
+    ClassOrMemberModifierList ret;
 
-	ret.is_abstract = NOT_SPECIFIED_MODIFIER;
-	ret.access_modifier = NOT_SPECIFIED_MODIFIER;
-	ret.is_override = NOT_SPECIFIED_MODIFIER;
-	ret.is_virtual = NOT_SPECIFIED_MODIFIER;
-	switch (modifier) {
-	case ABSTRACT_MODIFIER:
-		ret.is_abstract = ABSTRACT_MODIFIER;
-		break;
-	case PUBLIC_MODIFIER:
-		ret.access_modifier = PUBLIC_MODIFIER;
-		break;
-	case PRIVATE_MODIFIER:
-		ret.access_modifier = PRIVATE_MODIFIER;
-		break;
-	case OVERRIDE_MODIFIER:
-		ret.is_override = OVERRIDE_MODIFIER;
-		break;
-	case VIRTUAL_MODIFIER:
-		ret.is_virtual = VIRTUAL_MODIFIER;
-		break;
-	case NOT_SPECIFIED_MODIFIER: /* FALLTHRU */
-	default:
-		DBG_assert(0, ("modifier..%d", modifier));
-	}
+    ret.is_abstract = NOT_SPECIFIED_MODIFIER;
+    ret.access_modifier = NOT_SPECIFIED_MODIFIER;
+    ret.is_override = NOT_SPECIFIED_MODIFIER;
+    ret.is_virtual = NOT_SPECIFIED_MODIFIER;
 
-	return ret;
+    switch (modifier) {
+    case ABSTRACT_MODIFIER:
+        ret.is_abstract = ABSTRACT_MODIFIER;
+        break;
+    case PUBLIC_MODIFIER:
+        ret.access_modifier = PUBLIC_MODIFIER;
+        break;
+    case PRIVATE_MODIFIER:
+        ret.access_modifier = PRIVATE_MODIFIER;
+        break;
+    case OVERRIDE_MODIFIER:
+        ret.is_override = OVERRIDE_MODIFIER;
+        break;
+    case VIRTUAL_MODIFIER:
+        ret.is_virtual = VIRTUAL_MODIFIER;
+        break;
+    case NOT_SPECIFIED_MODIFIER: /* FALLTHRU */
+    default:
+        DBG_assert(0, ("modifier..%d", modifier));
+    }
+
+    return ret;
 }
 
-ClassOrMemberModifierList dkc_chain_class_or_member_modifier(ClassOrMemberModifierList list, ClassOrMemberModifierList add){
-	if (add.is_abstract != NOT_SPECIFIED_MODIFIER) {
-		DBG_assert(add.is_abstract == ABSTRACT_MODIFIER, ("add.is_abstract..%d", add.is_abstract));
-		if (list.is_abstract != NOT_SPECIFIED_MODIFIER) {
-			dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-				ABSTRACT_MULTIPLE_SPECIFIED_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-		list.is_abstract = ABSTRACT_MODIFIER;
+ClassOrMemberModifierList
+dkc_chain_class_or_member_modifier(ClassOrMemberModifierList list,
+                                   ClassOrMemberModifierList add)
+{
+    if (add.is_abstract != NOT_SPECIFIED_MODIFIER) {
+        DBG_assert(add.is_abstract == ABSTRACT_MODIFIER,
+                   ("add.is_abstract..%d", add.is_abstract));
+        if (list.is_abstract != NOT_SPECIFIED_MODIFIER) {
+            dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                              ABSTRACT_MULTIPLE_SPECIFIED_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+        list.is_abstract = ABSTRACT_MODIFIER;
 
-	}
-	else if (add.access_modifier != NOT_SPECIFIED_MODIFIER) {
-		DBG_assert(add.access_modifier == PUBLIC_MODIFIER || add.access_modifier == PRIVATE_MODIFIER, ("add.access_modifier..%d", add.access_modifier));
-		if (list.access_modifier != NOT_SPECIFIED_MODIFIER) {
-			dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-				ACCESS_MODIFIER_MULTIPLE_SPECIFIED_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-		list.access_modifier = add.access_modifier;
+    } else if (add.access_modifier != NOT_SPECIFIED_MODIFIER) {
+        DBG_assert(add.access_modifier == PUBLIC_MODIFIER
+                   || add.access_modifier == PUBLIC_MODIFIER,
+                   ("add.access_modifier..%d", add.access_modifier));
+        if (list.access_modifier != NOT_SPECIFIED_MODIFIER) {
+            dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                              ACCESS_MODIFIER_MULTIPLE_SPECIFIED_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+        list.access_modifier = add.access_modifier;
 
-	}
-	else if (add.is_override != NOT_SPECIFIED_MODIFIER) {
-		DBG_assert(add.is_override == OVERRIDE_MODIFIER, ("add.is_override..%d", add.is_override));
-		if (list.is_override != NOT_SPECIFIED_MODIFIER) {
-			dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-				OVERRIDE_MODIFIER_MULTIPLE_SPECIFIED_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-		list.is_override = add.is_override;
-	}
-	else if (add.is_virtual != NOT_SPECIFIED_MODIFIER) {
-		DBG_assert(add.is_virtual == VIRTUAL_MODIFIER, ("add.is_virtual..%d", add.is_virtual));
-		if (list.is_virtual != NOT_SPECIFIED_MODIFIER) {
-			dkc_compile_error(dkc_get_current_compiler()->current_line_number,
-				VIRTUAL_MODIFIER_MULTIPLE_SPECIFIED_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-		list.is_virtual = add.is_virtual;
-	}
-	return list;
+    } else if (add.is_override != NOT_SPECIFIED_MODIFIER) {
+        DBG_assert(add.is_override == OVERRIDE_MODIFIER,
+                   ("add.is_override..%d", add.is_override));
+        if (list.is_override != NOT_SPECIFIED_MODIFIER) {
+            dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                              OVERRIDE_MODIFIER_MULTIPLE_SPECIFIED_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+        list.is_override = add.is_override;
+    } else if (add.is_virtual != NOT_SPECIFIED_MODIFIER) {
+        DBG_assert(add.is_virtual == VIRTUAL_MODIFIER,
+                   ("add.is_virtual..%d", add.is_virtual));
+        if (list.is_virtual != NOT_SPECIFIED_MODIFIER) {
+            dkc_compile_error(dkc_get_current_compiler()->current_line_number,
+                              VIRTUAL_MODIFIER_MULTIPLE_SPECIFIED_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+        list.is_virtual = add.is_virtual;
+    }
+    return list;
 }
 
-MemberDeclaration* dkc_chain_member_declaration(MemberDeclaration *list, MemberDeclaration *add){
-	MemberDeclaration *pos;
+MemberDeclaration *
+dkc_chain_member_declaration(MemberDeclaration *list, MemberDeclaration *add)
+{
+    MemberDeclaration *pos;
 
-	for (pos = list; pos->next; pos = pos->next);
-	pos->next = add;
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = add;
 
-	return list;
+    return list;
 }
 
-// 分配成员声明内存空间
-static MemberDeclaration* alloc_member_declaration(MemberKind kind, ClassOrMemberModifierList *modifier){
-	MemberDeclaration *ret;
+static MemberDeclaration *
+alloc_member_declaration(MemberKind kind,
+                         ClassOrMemberModifierList *modifier)
+{
+    MemberDeclaration *ret;
 
-	ret = dkc_malloc(sizeof(MemberDeclaration));
-	ret->kind = kind;
-	if (modifier) {
-		ret->access_modifier = conv_access_modifier(modifier->access_modifier);
-	}
-	else {
-		ret->access_modifier = DVM_FILE_ACCESS;
-	}
-	ret->line_number = dkc_get_current_compiler()->current_line_number;
-	ret->next = NULL;
+    ret = dkc_malloc(sizeof(MemberDeclaration));
+    ret->kind = kind;
+    if (modifier) {
+        ret->access_modifier = conv_access_modifier(modifier->access_modifier);
+    } else {
+        ret->access_modifier = DVM_FILE_ACCESS;
+    }
+    ret->line_number = dkc_get_current_compiler()->current_line_number;
+    ret->next = NULL;
 
-	return ret;
+    return ret;
 }
 
-// 创建方法成员，首先分配成员声明内存空间，初始化成员修饰符，根据参数指定的修饰符的内容来更改方法的属性
-MemberDeclaration* dkc_create_method_member(ClassOrMemberModifierList *modifier, FunctionDefinition *function_definition, DVM_Boolean is_constructor){
-	MemberDeclaration *ret;
-	DKC_Compiler *compiler;
+MemberDeclaration *
+dkc_create_method_member(ClassOrMemberModifierList *modifier,
+                         FunctionDefinition *function_definition,
+                         DVM_Boolean is_constructor)
+{
+    MemberDeclaration *ret;
+    DKC_Compiler *compiler;
 
-	ret = alloc_member_declaration(METHOD_MEMBER, modifier);
-	ret->u.method.is_constructor = is_constructor;
-	ret->u.method.is_abstract = DVM_FALSE;
-	ret->u.method.is_virtual = DVM_FALSE;
-	ret->u.method.is_override = DVM_FALSE;
-	if (modifier) {
-		if (modifier->is_abstract == ABSTRACT_MODIFIER) {
-			ret->u.method.is_abstract = DVM_TRUE;
-		}
-		if (modifier->is_virtual == VIRTUAL_MODIFIER) {
-			ret->u.method.is_virtual = DVM_TRUE;
-		}
-		if (modifier->is_override == OVERRIDE_MODIFIER) {
-			ret->u.method.is_override = DVM_TRUE;
-		}
-	}
-	compiler = dkc_get_current_compiler();
-	if (compiler->current_class_definition->class_or_interface == DVM_INTERFACE_DEFINITION) {
-		/* BUGBUG error check */
-		ret->u.method.is_abstract = DVM_TRUE;
-		ret->u.method.is_virtual = DVM_TRUE;
-	}
-	ret->u.method.function_definition = function_definition;
-	if (ret->u.method.is_abstract) {
-		if (function_definition->block) {
-			dkc_compile_error(compiler->current_line_number,
-				ABSTRACT_METHOD_HAS_BODY_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-	}
-	else {
-		if (function_definition->block == NULL) {
-			dkc_compile_error(compiler->current_line_number,
-				CONCRETE_METHOD_HAS_NO_BODY_ERR,
-				MESSAGE_ARGUMENT_END);
-		}
-	}
-	function_definition->class_definition = compiler->current_class_definition;
+    ret = alloc_member_declaration(METHOD_MEMBER, modifier);
+    ret->u.method.is_constructor = is_constructor;
+    ret->u.method.is_abstract = DVM_FALSE;
+    ret->u.method.is_virtual = DVM_FALSE;
+    ret->u.method.is_override = DVM_FALSE;
+    if (modifier) {
+        if (modifier->is_abstract == ABSTRACT_MODIFIER) {
+            ret->u.method.is_abstract = DVM_TRUE;
+        }
+        if (modifier->is_virtual == VIRTUAL_MODIFIER) {
+            ret->u.method.is_virtual = DVM_TRUE;
+        }
+        if (modifier->is_override == OVERRIDE_MODIFIER) {
+            ret->u.method.is_override = DVM_TRUE;
+        }
+    }
+    compiler = dkc_get_current_compiler();
+    if (compiler->current_class_definition->class_or_interface
+        == DVM_INTERFACE_DEFINITION) {
+        /* BUGBUG error check */
+        ret->u.method.is_abstract = DVM_TRUE;
+        ret->u.method.is_virtual = DVM_TRUE;
+    }
 
-	return ret;
+    ret->u.method.function_definition = function_definition;
+
+    if (ret->u.method.is_abstract) {
+        if (function_definition->block) {
+            dkc_compile_error(compiler->current_line_number,
+                              ABSTRACT_METHOD_HAS_BODY_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+    } else {
+        if (function_definition->block == NULL) {
+            dkc_compile_error(compiler->current_line_number,
+                              CONCRETE_METHOD_HAS_NO_BODY_ERR,
+                              MESSAGE_ARGUMENT_END);
+        }
+    }
+    function_definition->class_definition
+        = compiler->current_class_definition;
+
+    return ret;
 }
 
-// 创建方法定义，方法本质上讲还是类中的函数，所以内部实现还是在创建函数
-FunctionDefinition* dkc_method_function_define(TypeSpecifier *type, char *identifier,ParameterList *parameter_list,Block *block){
+FunctionDefinition *
+dkc_method_function_define(TypeSpecifier *type, char *identifier,
+                           ParameterList *parameter_list,
+                           ExceptionList *throws, Block *block)
+{
     FunctionDefinition *fd;
 
-    fd = dkc_create_function_definition(type, identifier, parameter_list,block);
+    fd = dkc_create_function_definition(type, identifier, parameter_list,
+                                        throws, block);
 
     return fd;
 }
 
-// 创建构造函数定义
-FunctionDefinition* dkc_constructor_function_define(char *identifier, ParameterList *parameter_list, Block *block){
-	FunctionDefinition *fd;
-	TypeSpecifier *type;
-	// 构造函数的返回值为void
-	type = dkc_create_type_specifier(DVM_VOID_TYPE);
-	fd = dkc_method_function_define(type, identifier, parameter_list, block);
+FunctionDefinition *
+dkc_constructor_function_define(char *identifier,
+                                ParameterList *parameter_list,
+                                ExceptionList *throws, Block *block)
+{
+    FunctionDefinition *fd;
+    TypeSpecifier *type;
 
-	return fd;
+    type = dkc_create_type_specifier(DVM_VOID_TYPE);
+    fd = dkc_method_function_define(type, identifier, parameter_list,
+                                    throws, block);
+
+    return fd;
 }
 
-// 创建字段成员
-MemberDeclaration* dkc_create_field_member(ClassOrMemberModifierList *modifier,TypeSpecifier *type, char *name){
+MemberDeclaration *
+dkc_create_field_member(ClassOrMemberModifierList *modifier,
+                        DVM_Boolean is_final, TypeSpecifier *type, char *name,
+                        Expression *initializer)
+{
     MemberDeclaration *ret;
 
     ret = alloc_member_declaration(FIELD_MEMBER, modifier);
     ret->u.field.name = name;
     ret->u.field.type = type;
+    ret->u.field.initializer = initializer;
+    ret->u.field.is_final = is_final;
 
     return ret;
+}
+
+ExceptionList *
+dkc_create_throws(char *identifier)
+{
+    ExceptionList *list;
+
+    list = dkc_malloc(sizeof(ExceptionList));
+    list->ref = dkc_malloc(sizeof(ExceptionRef));
+    list->ref->identifier = identifier;
+    list->ref->class_definition = NULL;
+    list->ref->line_number = dkc_get_current_compiler()->current_line_number;
+    list->next = NULL;
+
+    return list;
+}
+
+ExceptionList *
+dkc_chain_exception_list(ExceptionList *list, char *identifier)
+{
+    ExceptionList *pos;
+
+    for (pos = list; pos->next; pos = pos->next)
+        ;
+    pos->next = dkc_create_throws(identifier);
+
+    return list;
+}
+
+void
+dkc_create_delegate_definition(TypeSpecifier *type, char *identifier,
+                               ParameterList *parameter_list,
+                               ExceptionList *throws)
+{
+    DelegateDefinition *dd;
+    DelegateDefinition *pos;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+
+    dd = dkc_malloc(sizeof(DelegateDefinition));
+    dd->type = type;
+    dd->name = identifier;
+    dd->parameter_list = parameter_list;
+    dd->throws = throws;
+    dd->next = NULL;
+
+    if (compiler->delegate_definition_list == NULL) {
+        compiler->delegate_definition_list = dd;
+    } else {
+        for (pos = compiler->delegate_definition_list; pos->next;
+             pos = pos->next)
+            ;
+        pos->next = dd;
+    }
+}
+
+void
+dkc_create_enum_definition(char *identifier, Enumerator *enumerator)
+{
+    EnumDefinition *ed;
+    EnumDefinition *pos;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+    int value;
+    Enumerator *enumerator_pos;
+
+    ed = dkc_malloc(sizeof(EnumDefinition));
+    ed->package_name = compiler->package_name;
+    ed->name = identifier;
+    ed->enumerator = enumerator;
+    ed->next = NULL;
+
+    value = 0;
+    for (enumerator_pos = enumerator; enumerator_pos;
+         enumerator_pos = enumerator_pos->next) {
+        enumerator_pos->value = value;
+        value++;
+    }
+
+    if (compiler->enum_definition_list == NULL) {
+        compiler->enum_definition_list = ed;
+    } else {
+        for (pos = compiler->enum_definition_list; pos->next;
+             pos = pos->next)
+            ;
+        pos->next = ed;
+    }
+}
+
+Enumerator *
+dkc_create_enumerator(char *identifier)
+{
+    Enumerator *enumerator;
+
+    enumerator = dkc_malloc(sizeof(Enumerator));
+    enumerator->name = identifier;
+    enumerator->value = UNDEFINED_ENUMERATOR;
+    enumerator->next = NULL;
+
+    return enumerator;
+}
+
+Enumerator *
+dkc_chain_enumerator(Enumerator *enumerator, char *identifier)
+{
+    Enumerator *pos;
+
+    for (pos = enumerator; pos->next; pos = pos->next)
+        ;
+    pos->next = dkc_create_enumerator(identifier);
+
+    return enumerator;
+}
+
+void
+dkc_create_const_definition(TypeSpecifier *type, char *identifier,
+                            Expression *initializer)
+{
+    ConstantDefinition *cd;
+    ConstantDefinition *pos;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+    
+    cd = dkc_malloc(sizeof(ConstantDefinition));
+    cd->type = type;
+    cd->package_name = compiler->package_name;
+    cd->name = identifier;
+    cd->initializer = initializer;
+    cd->line_number = compiler->current_line_number;
+    cd->next = NULL;
+
+    if (compiler->constant_definition_list == NULL) {
+        compiler->constant_definition_list = cd;
+    } else {
+        for (pos = compiler->constant_definition_list; pos->next;
+             pos = pos->next)
+            ;
+        pos->next = cd;
+    }
 }

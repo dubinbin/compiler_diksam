@@ -1,4 +1,3 @@
-﻿#include "stdafx.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
@@ -9,10 +8,8 @@
 extern OpcodeInfo dvm_opcode_info[];
 
 #define OPCODE_ALLOC_SIZE (256)
-
 #define LABEL_TABLE_ALLOC_SIZE (256)
 
-// 标签表，用于在编译期临时存储break，continue，jump等的跳转地址，是一个整形索引
 typedef struct {
     int label_address;
 } LabelTable;
@@ -26,9 +23,13 @@ typedef struct {
     LabelTable  *label_table;
     int         line_number_size;
     DVM_LineNumber      *line_number;
+    int         try_size;
+    DVM_Try     *try;
 } OpcodeBuf;
 
-static DVM_Executable* alloc_executable(PackageName *package_name){
+static DVM_Executable *
+alloc_executable(PackageName *package_name)
+{
     DVM_Executable      *exe;
 
     exe = MEM_malloc(sizeof(DVM_Executable));
@@ -40,46 +41,59 @@ static DVM_Executable* alloc_executable(PackageName *package_name){
     exe->global_variable = NULL;
     exe->function_count = 0;
     exe->function = NULL;
+    exe->constant_count = 0;
+    exe->constant_definition = NULL;
     exe->type_specifier_count = 0;
     exe->type_specifier = NULL;
-    exe->code_size = 0;
-    exe->code = NULL;
+    exe->top_level.code_size = 0;
+    exe->top_level.code = NULL;
 
     return exe;
 }
 
-// 添加一个常量池并返回此常量池的索引
-static int add_constant_pool(DVM_Executable *exe, DVM_ConstantPool *cp){
-	int ret;
+static int
+add_constant_pool(DVM_Executable *exe, DVM_ConstantPool *cp)
+{
+    int ret;
 
-	exe->constant_pool = MEM_realloc(exe->constant_pool, sizeof(DVM_ConstantPool)* (exe->constant_pool_count + 1));
-	exe->constant_pool[exe->constant_pool_count] = *cp;
-	ret = exe->constant_pool_count;
-	exe->constant_pool_count++;
+    exe->constant_pool
+        = MEM_realloc(exe->constant_pool,
+                      sizeof(DVM_ConstantPool)
+                      * (exe->constant_pool_count + 1));
+    exe->constant_pool[exe->constant_pool_count] = *cp;
 
-	return ret;
+    ret = exe->constant_pool_count;
+    exe->constant_pool_count++;
+
+    return ret;
 }
 
-static int count_parameter(ParameterList *src){
-	ParameterList *param;
-	int param_count = 0;
+static int
+count_parameter(ParameterList *src)
+{
+    ParameterList *param;
+    int param_count = 0;
 
-	for (param = src; param; param = param->next) {
-		param_count++;
-	}
+    for (param = src; param; param = param->next) {
+        param_count++;
+    }
 
-	return param_count;
+    return param_count;
 }
 
-static DVM_LocalVariable* copy_parameter_list(ParameterList *src, int *param_count_p){
+static DVM_LocalVariable *
+copy_parameter_list(ParameterList *src, int *param_count_p)
+{
     ParameterList *param;
     DVM_LocalVariable *dest;
     int param_count;
     int i;
-	
+
     param_count = count_parameter(src);
     *param_count_p = param_count;
+
     dest = MEM_malloc(sizeof(DVM_LocalVariable) * param_count);
+    
     for (param = src, i = 0; param; param = param->next, i++) {
         dest[i].name = MEM_strdup(param->name);
         dest[i].type = dkc_copy_type_specifier(param->type);
@@ -88,52 +102,60 @@ static DVM_LocalVariable* copy_parameter_list(ParameterList *src, int *param_cou
     return dest;
 }
 
-static void copy_type_specifier_no_alloc(TypeSpecifier *src, DVM_TypeSpecifier *dest){
-	int derive_count = 0;
-	TypeDerive *derive;
-	int param_count;
-	int i;
+static void
+copy_type_specifier_no_alloc(TypeSpecifier *src, DVM_TypeSpecifier *dest)
+{
+    int derive_count = 0;
+    TypeDerive *derive;
+    int param_count;
+    int i;
 
-	dest->basic_type = src->basic_type;
-	if (src->basic_type == DVM_CLASS_TYPE) {
-		dest->class_index = src->Class_ref.class_index;
-	}
-	else {
-		dest->class_index = -1;
-	}
-	for (derive = src->derive; derive; derive = derive->next) {
-		derive_count++;
-	}
-	dest->derive_count = derive_count;
-	dest->derive = MEM_malloc(sizeof(DVM_TypeDerive) * derive_count);
-	for (i = 0, derive = src->derive; derive; derive = derive->next, i++) {
-		switch (derive->tag) {
-		case FUNCTION_DERIVE:
-			dest->derive[i].tag = DVM_FUNCTION_DERIVE;
-			dest->derive[i].u.function_d.parameter = copy_parameter_list(derive->u.function_d.parameter_list, &param_count);
-			dest->derive[i].u.function_d.parameter_count = param_count;
-			break;
-		case ARRAY_DERIVE:
-			dest->derive[i].tag = DVM_ARRAY_DERIVE;
-			break;
-		default:
-			DBG_assert(0, ("derive->tag..%d\n", derive->tag));
-		}
-	}
+    dest->basic_type = src->basic_type;
+    if (src->basic_type == DVM_CLASS_TYPE) {
+        dest->u.class_t.index = src->u.class_ref.class_index;
+    } else {
+        dest->u.class_t.index = -1;
+    }
+
+    for (derive = src->derive; derive; derive = derive->next) {
+        derive_count++;
+    }
+    dest->derive_count = derive_count;
+    dest->derive = MEM_malloc(sizeof(DVM_TypeDerive) * derive_count);
+    for (i = 0, derive = src->derive; derive;
+         derive = derive->next, i++) {
+        switch (derive->tag) {
+        case FUNCTION_DERIVE:
+            dest->derive[i].tag = DVM_FUNCTION_DERIVE;
+            dest->derive[i].u.function_d.parameter
+                = copy_parameter_list(derive->u.function_d.parameter_list,
+                                      &param_count);
+            dest->derive[i].u.function_d.parameter_count = param_count;
+            break;
+        case ARRAY_DERIVE:
+            dest->derive[i].tag = DVM_ARRAY_DERIVE;
+            break;
+        default:
+            DBG_assert(0, ("derive->tag..%d\n", derive->tag));
+        }
+    }
 }
 
-// 复制参数指定的类型指定器，并返回新的类型指定器
-DVM_TypeSpecifier* dkc_copy_type_specifier(TypeSpecifier *src){
+DVM_TypeSpecifier *
+dkc_copy_type_specifier(TypeSpecifier *src)
+{
     DVM_TypeSpecifier *dest;
 
     dest = MEM_malloc(sizeof(DVM_TypeSpecifier));
+
     copy_type_specifier_no_alloc(src, dest);
 
     return dest;
 }
 
-// 在执行体中添加全局变量
-static void add_global_variable(DKC_Compiler *compiler, DVM_Executable *exe){
+static void
+add_global_variable(DKC_Compiler *compiler, DVM_Executable *exe)
+{
     DeclarationList *dl;
     int i;
     int var_count = 0;
@@ -143,111 +165,129 @@ static void add_global_variable(DKC_Compiler *compiler, DVM_Executable *exe){
     }
     exe->global_variable_count = var_count;
     exe->global_variable = MEM_malloc(sizeof(DVM_Variable) * var_count);
+
     for (dl = compiler->declaration_list, i = 0; dl; dl = dl->next, i++) {
         exe->global_variable[i].name = MEM_strdup(dl->declaration->name);
-        exe->global_variable[i].type = dkc_copy_type_specifier(dl->declaration->type);
+        exe->global_variable[i].type
+            = dkc_copy_type_specifier(dl->declaration->type);
     }
 }
 
-// 为执行体添加一个方法
-static void add_method(DVM_Executable *exe, MemberDeclaration *member, DVM_Method *dest, DVM_Boolean is_implemented){
-	FunctionDefinition *fd;
+static void
+add_method(DVM_Executable *exe,
+           MemberDeclaration *member, DVM_Method *dest,
+           DVM_Boolean is_implemented)
+{
+    FunctionDefinition *fd;
 
-	dest->access_modifier = member->access_modifier;
-	dest->is_abstract = member->u.method.is_abstract;
-	dest->is_virtual = member->u.method.is_virtual;
-	dest->is_override = member->u.method.is_override;
-	dest->name = MEM_strdup(member->u.method.function_definition->name);
-	fd = member->u.method.function_definition;
+    dest->access_modifier = member->access_modifier;
+    dest->is_abstract = member->u.method.is_abstract;
+    dest->is_virtual = member->u.method.is_virtual;
+    dest->is_override = member->u.method.is_override;
+    dest->name = MEM_strdup(member->u.method.function_definition->name);
+
+    fd = member->u.method.function_definition;
 }
 
-// 为执行体添加一个字段
-static void add_field(MemberDeclaration *member, DVM_Field *dest){
+static void
+add_field(MemberDeclaration *member, DVM_Field *dest)
+{
     dest->access_modifier = member->access_modifier;
     dest->name = MEM_strdup(member->u.field.name);
     dest->type = dkc_copy_type_specifier(member->u.field.type);
 }
 
-// 设置执行体中类的名称和所在包名称
-static void set_class_identifier(ClassDefinition *cd, DVM_ClassIdentifier *ci){
+static void
+set_class_identifier(ClassDefinition *cd, DVM_ClassIdentifier *ci)
+{
     ci->name = MEM_strdup(cd->name);
     ci->package_name = dkc_package_name_to_string(cd->package_name);
 }
 
-// 在编译器中根据类定义寻找类
-static DVM_Class * search_class(DKC_Compiler *compiler, ClassDefinition *src){
-	int i;
-	char *src_package_name;
+static DVM_Class *
+search_class(DKC_Compiler *compiler, ClassDefinition *src)
+{
+    int i;
+    char *src_package_name;
 
-	src_package_name = dkc_package_name_to_string(src->package_name);
-	for (i = 0; i < compiler->dvm_class_count; i++) {
-		if (dvm_compare_package_name(src_package_name, compiler->dvm_class[i].package_name) && !strcmp(src->name, compiler->dvm_class[i].name)) {
-			MEM_free(src_package_name);
-			return &compiler->dvm_class[i];
-		}
-	}
-	DBG_assert(0, ("function %s::%s not found.", src_package_name, src->name));
+    src_package_name = dkc_package_name_to_string(src->package_name);
+    for (i = 0; i < compiler->dvm_class_count; i++) {
+        if (dvm_compare_package_name(src_package_name,
+                                     compiler->dvm_class[i].package_name)
+            && !strcmp(src->name, compiler->dvm_class[i].name)) {
+            MEM_free(src_package_name);
+            return &compiler->dvm_class[i];
+        }
+    }
+    DBG_assert(0, ("function %s::%s not found.", src_package_name, src->name));
 
-	return NULL; /* make compiler happy. */
+    return NULL; /* make compiler happy. */
 }
 
-// 为执行体添加一个类
-static void add_class(DVM_Executable *exe, ClassDefinition *cd, DVM_Class *dest){
-	int interface_count = 0;
-	int method_count = 0;
-	int field_count = 0;
-	MemberDeclaration *pos;
-	ExtendsList *if_pos;
+static void
+add_class(DVM_Executable *exe, ClassDefinition *cd, DVM_Class *dest)
+{
+    int interface_count = 0;
+    int method_count = 0;
+    int field_count = 0;
+    MemberDeclaration *pos;
+    ExtendsList *if_pos;
 
-	dest->is_abstract = cd->is_abstract;
-	dest->access_modifier = cd->access_modifier;
-	dest->class_or_interface = cd->class_or_interface;
-	if (cd->super_class) {
-		dest->super_class = MEM_malloc(sizeof(DVM_ClassIdentifier));
-		set_class_identifier(cd->super_class, dest->super_class);
-	}
-	else {
-		dest->super_class = NULL;
-	}
-	for (if_pos = cd->interface_list; if_pos; if_pos = if_pos->next) {
-		interface_count++;
-	}
-	dest->interface_count = interface_count;
-	dest->interface_ = MEM_malloc(sizeof(DVM_ClassIdentifier)* interface_count);
-	interface_count = 0;
-	for (if_pos = cd->interface_list; if_pos; if_pos = if_pos->next) {
-		set_class_identifier(if_pos->class_definition, &dest->interface_[interface_count]);
-		interface_count++;
-	}
-	for (pos = cd->member; pos; pos = pos->next) {
-		if (pos->kind == METHOD_MEMBER) {
-			method_count++;
-		}
-		else {
-			DBG_assert(pos->kind == FIELD_MEMBER, ("pos->kind..%d", pos->kind));
-			field_count++;
-		}
-	}
-	dest->field_count = field_count;
-	dest->field = MEM_malloc(sizeof(DVM_Field) * field_count);
-	dest->method_count = method_count;
-	dest->method = MEM_malloc(sizeof(DVM_Method) * method_count);
-	method_count = field_count = 0;
-	for (pos = cd->member; pos; pos = pos->next) {
-		if (pos->kind == METHOD_MEMBER) {
-			add_method(exe, pos, &dest->method[method_count], dest->is_implemented);
-			method_count++;
-		}
-		else {
-			DBG_assert(pos->kind == FIELD_MEMBER, ("pos->kind..%d", pos->kind));
-			add_field(pos, &dest->field[field_count]);
-			field_count++;
-		}
-	}
+    dest->is_abstract = cd->is_abstract;
+    dest->access_modifier = cd->access_modifier;
+    dest->class_or_interface = cd->class_or_interface;
+
+    if (cd->super_class) {
+        dest->super_class = MEM_malloc(sizeof(DVM_ClassIdentifier));
+        set_class_identifier(cd->super_class, dest->super_class);
+    } else {
+        dest->super_class = NULL;
+    }
+    for (if_pos = cd->interface_list; if_pos; if_pos = if_pos->next) {
+        interface_count++;
+    }
+    dest->interface_count = interface_count;
+    dest->interface_ = MEM_malloc(sizeof(DVM_ClassIdentifier)
+                                  * interface_count);
+    interface_count = 0;
+    for (if_pos = cd->interface_list; if_pos; if_pos = if_pos->next) {
+        set_class_identifier(if_pos->class_definition,
+                             &dest->interface_[interface_count]);
+        interface_count++;
+    }
+
+    for (pos = cd->member; pos; pos = pos->next) {
+        if (pos->kind == METHOD_MEMBER) {
+            method_count++;
+        } else {
+            DBG_assert(pos->kind == FIELD_MEMBER,
+                       ("pos->kind..%d", pos->kind));
+            field_count++;
+        }
+    }
+    dest->field_count = field_count;
+    dest->field = MEM_malloc(sizeof(DVM_Field) * field_count);
+    dest->method_count = method_count;
+    dest->method = MEM_malloc(sizeof(DVM_Method) * method_count);
+
+    method_count = field_count = 0;
+    for (pos = cd->member; pos; pos = pos->next) {
+        if (pos->kind == METHOD_MEMBER) {
+            add_method(exe, pos, &dest->method[method_count],
+                       dest->is_implemented);
+            method_count++;
+        } else {
+            DBG_assert(pos->kind == FIELD_MEMBER,
+                       ("pos->kind..%d", pos->kind));
+            add_field(pos, &dest->field[field_count]);
+            field_count++;
+        }
+    }
 }
 
-// 初始化字节码缓冲区
-static void init_opcode_buf(OpcodeBuf *ob){
+static void
+init_opcode_buf(OpcodeBuf *ob)
+{
     ob->size = 0;
     ob->alloc_size = 0;
     ob->code = NULL;
@@ -256,43 +296,48 @@ static void init_opcode_buf(OpcodeBuf *ob){
     ob->label_table = NULL;
     ob->line_number_size = 0;
     ob->line_number = NULL;
+    ob->try_size = 0;
+    ob->try = NULL;
 }
 
-// 修复标签
-static void fix_labels(OpcodeBuf *ob){
-	int i;
-	int j;
-	OpcodeInfo *info;
-	int label;
-	int address;
-	// 修复jump指令，取出原先字节码中流程控制跳转指令后两个字节的数据，根据此数据到标签表中
-	// 寻找真正的地址，将地址按大端法写入命令的后两个字节
-	for (i = 0; i < ob->size; i++) {
-		if (ob->code[i] == DVM_JUMP || ob->code[i] == DVM_JUMP_IF_TRUE || ob->code[i] == DVM_JUMP_IF_FALSE) {
-			label = (ob->code[i + 1] << 8) + (ob->code[i + 2]);
-			address = ob->label_table[label].label_address;
-			ob->code[i + 1] = (DVM_Byte)(address >> 8);
-			ob->code[i + 2] = (DVM_Byte)(address & 0xff);
-		}
-		info = &dvm_opcode_info[ob->code[i]];
-		for (j = 0; info->parameter[j] != '\0'; j++) {
-			switch (info->parameter[j]) {
-			case 'b':
-				i++;
-				break;
-			case 's': /* FALLTHRU */
-			case 'p':
-				i += 2;
-				break;
-			default:
-				DBG_assert(0, ("param..%s, j..%d", info->parameter, j));
-			}
-		}
-	}
+static void
+fix_labels(OpcodeBuf *ob)
+{
+    int i;
+    int j;
+    OpcodeInfo *info;
+    int label;
+    int address;
+
+    for (i = 0; i < ob->size; i++) {
+        if (ob->code[i] == DVM_JUMP
+            || ob->code[i] == DVM_JUMP_IF_TRUE
+            || ob->code[i] == DVM_JUMP_IF_FALSE
+            || ob->code[i] == DVM_GO_FINALLY) {
+            label = (ob->code[i+1] << 8) + (ob->code[i+2]);
+            address = ob->label_table[label].label_address;
+            ob->code[i+1] = (DVM_Byte)(address >> 8);
+            ob->code[i+2] = (DVM_Byte)(address &0xff);
+        }
+        info = &dvm_opcode_info[ob->code[i]];
+        for (j = 0; info->parameter[j] != '\0'; j++) {
+            switch (info->parameter[j]) {
+            case 'b':
+                i++;
+                break;
+            case 's': /* FALLTHRU */
+            case 'p':
+                i += 2;
+                break;
+            default:
+                DBG_assert(0, ("param..%s, j..%d", info->parameter, j));
+            }
+        }
+    }
 }
 
-// 修复字节码缓冲区
-static DVM_Byte* fix_opcode_buf(OpcodeBuf *ob)
+static DVM_Byte *
+fix_opcode_buf(OpcodeBuf *ob)
 {
     DVM_Byte *ret;
 
@@ -303,224 +348,310 @@ static DVM_Byte* fix_opcode_buf(OpcodeBuf *ob)
     return ret;
 }
 
-// 计算函数调用时栈的需求量，栈的需求量在指令中有说明，获取每条指令的需求量，然后计算
-// 函数调用内所有指令的需求量
-static int calc_need_stack_size(DVM_Byte *code, int code_size){
-	int i, j;
-	int stack_size = 0;
-	OpcodeInfo  *info;
+static int
+calc_need_stack_size(DVM_Byte *code, int code_size)
+{
+    int i, j;
+    int stack_size = 0;
+    OpcodeInfo  *info;
 
-	for (i = 0; i < code_size; i++) {
-		info = &dvm_opcode_info[code[i]];
-		if (info->stack_increment > 0) {
-			stack_size += info->stack_increment;
-		}
-		for (j = 0; info->parameter[j] != '\0'; j++) {
-			switch (info->parameter[j]) {
-			case 'b':
-				i++;
-				break;
-			case 's': /* FALLTHRU */
-			case 'p':
-				i += 2;
-				break;
-			default:
-				DBG_assert(0, ("param..%s, j..%d", info->parameter, j));
-			}
-		}
-	}
+    for (i = 0; i < code_size; i++) {
+        info = &dvm_opcode_info[code[i]];
+        if (info->stack_increment > 0) {
+            stack_size += info->stack_increment;
+        }
+        for (j = 0; info->parameter[j] != '\0'; j++) {
+            switch (info->parameter[j]) {
+            case 'b':
+                i++;
+                break;
+            case 's': /* FALLTHRU */
+            case 'p':
+                i += 2;
+                break;
+            default:
+                DBG_assert(0, ("param..%s, j..%d", info->parameter, j));
+            }
+        }
+    }
 
-	return stack_size;
+    return stack_size;
 }
 
-// 增加行号或者是增加一行内的程序计数器值
-static void add_line_number(OpcodeBuf *ob, int line_number, int start_pc){
+static void
+add_line_number(OpcodeBuf *ob, int line_number, int start_pc)
+{
+    if (ob->line_number == NULL
+        || (ob->line_number[ob->line_number_size-1].line_number
+            != line_number)) {
+        ob->line_number = MEM_realloc(ob->line_number,
+                                      sizeof(DVM_LineNumber)
+                                      * (ob->line_number_size + 1));
 
-	if (ob->line_number == NULL || (ob->line_number[ob->line_number_size - 1].line_number != line_number)) {
-		ob->line_number = MEM_realloc(ob->line_number, sizeof(DVM_LineNumber) * (ob->line_number_size + 1));
-		ob->line_number[ob->line_number_size].line_number = line_number;
-		ob->line_number[ob->line_number_size].start_pc = start_pc;
-		ob->line_number[ob->line_number_size].pc_count = ob->size - start_pc;
-		ob->line_number_size++;
-	}
-	else {
-		ob->line_number[ob->line_number_size - 1].pc_count += ob->size - start_pc;
-	}
+        ob->line_number[ob->line_number_size].line_number = line_number;
+        ob->line_number[ob->line_number_size].start_pc = start_pc;
+        ob->line_number[ob->line_number_size].pc_count
+            = ob->size - start_pc;
+        ob->line_number_size++;
+
+    } else {
+        ob->line_number[ob->line_number_size-1].pc_count
+            += ob->size - start_pc;
+    }
 }
 
-// 代码生成
-static void generate_code(OpcodeBuf *ob, int line_number, DVM_Opcode code, ...){
-	va_list     ap;
-	int         i;
-	char        *param;
-	int         param_count;
-	int         start_pc;
+static void
+generate_code(OpcodeBuf *ob, int line_number, DVM_Opcode code,  ...)
+{
+    va_list     ap;
+    int         i;
+    char        *param;
+    int         param_count;
+    int         start_pc;
 
-	va_start(ap, code);
-	param = dvm_opcode_info[(int)code].parameter;
-	param_count = strlen(param);
-	if (ob->alloc_size < ob->size + 1 + (param_count * 2)) {
-		ob->code = MEM_realloc(ob->code, ob->alloc_size + OPCODE_ALLOC_SIZE);
-		ob->alloc_size += OPCODE_ALLOC_SIZE;
-	}
-	start_pc = ob->size;
-	ob->code[ob->size] = code;
-	ob->size++;
-	for (i = 0; param[i] != '\0'; i++) {
-		unsigned int value = va_arg(ap, int);
-		switch (param[i]) {
-		case 'b': /* byte */
-			ob->code[ob->size] = (DVM_Byte)value;
-			ob->size++;
-			break;
-		case 's': /* short(2byte int) */
-			ob->code[ob->size] = (DVM_Byte)(value >> 8);
-			ob->code[ob->size + 1] = (DVM_Byte)(value & 0xff);
-			ob->size += 2;
-			break;
-		case 'p': /* constant pool index */
-			ob->code[ob->size] = (DVM_Byte)(value >> 8);
-			ob->code[ob->size + 1] = (DVM_Byte)(value & 0xff);
-			ob->size += 2;
-			break;
-		default:
-			DBG_assert(0, ("param..%s, i..%d", param, i));
-		}
-	}
-	add_line_number(ob, line_number, start_pc);
-	va_end(ap);
+    va_start(ap, code);
+
+    param = dvm_opcode_info[(int)code].parameter;
+    param_count = strlen(param);
+    if (ob->alloc_size < ob->size + 1 + (param_count * 2)) {
+        ob->code = MEM_realloc(ob->code, ob->alloc_size + OPCODE_ALLOC_SIZE);
+        ob->alloc_size += OPCODE_ALLOC_SIZE;
+    }
+
+    start_pc = ob->size;
+    ob->code[ob->size] = code;
+    ob->size++;
+    for (i = 0; param[i] != '\0'; i++) {
+        unsigned int value = va_arg(ap, int);
+        switch (param[i]) {
+        case 'b': /* byte */
+            ob->code[ob->size] = (DVM_Byte)value;
+            ob->size++;
+            break;
+        case 's': /* short(2byte int) */
+            ob->code[ob->size] = (DVM_Byte)(value >> 8);
+            ob->code[ob->size+1] = (DVM_Byte)(value & 0xff);
+            ob->size += 2;
+            break;
+        case 'p': /* constant pool index */
+            ob->code[ob->size] = (DVM_Byte)(value >> 8);
+            ob->code[ob->size+1] = (DVM_Byte)(value & 0xff);
+            ob->size += 2;
+            break;
+        default:
+            DBG_assert(0, ("param..%s, i..%d", param, i));
+        }
+    }
+    add_line_number(ob, line_number, start_pc);
+
+    va_end(ap);
 }
 
-// 获取类型指定器相对于int类型的偏移
-static int get_opcode_type_offset(TypeSpecifier *type){
+static int
+get_opcode_type_offset(TypeSpecifier *type)
+{
+    if (type->derive != NULL) {
+        DBG_assert(type->derive->tag = ARRAY_DERIVE,
+                   ("type->derive->tag..%d", type->derive->tag));
+        return 2;
+    }
 
-	if (type->derive != NULL) {
-		DBG_assert(type->derive->tag = ARRAY_DERIVE,
-			("type->derive->tag..%d", type->derive->tag));
-		return 2;
-	}
-	switch (type->basic_type) {
-	case DVM_VOID_TYPE:
-		DBG_assert(0, ("basic_type is void"));
-		break;
-	case DVM_BOOLEAN_TYPE: /* FALLTHRU */
-	case DVM_INT_TYPE: /* FALLTHRU */
-		return 0;
-		break;
-	case DVM_DOUBLE_TYPE:
-		return 1;
-		break;
-	case DVM_STRING_TYPE: /* FALLTHRU */
-	case DVM_CLASS_TYPE: /* FALLTHRU */
-		return 2;
-		break;
-	case DVM_NULL_TYPE: /* FALLTHRU */
-	case DVM_BASE_TYPE: /* FALLTHRU */
-	default:
-		DBG_assert(0, ("basic_type..%d", type->basic_type));
-	}
+    switch (type->basic_type) {
+    case DVM_VOID_TYPE:
+        DBG_assert(0, ("basic_type is void"));
+        break;
+    case DVM_BOOLEAN_TYPE: /* FALLTHRU */
+    case DVM_INT_TYPE: /* FALLTHRU */
+    case DVM_ENUM_TYPE:
+        return 0;
+        break;
+    case DVM_DOUBLE_TYPE:
+        return 1;
+        break;
+    case DVM_STRING_TYPE: /* FALLTHRU */
+    case DVM_NATIVE_POINTER_TYPE: /* FALLTHRU */
+    case DVM_CLASS_TYPE: /* FALLTHRU */
+    case DVM_DELEGATE_TYPE: /* FALLTHRU */
+        return 2;
+        break;
+    case DVM_NULL_TYPE: /* FALLTHRU */
+    case DVM_BASE_TYPE: /* FALLTHRU */
+    case DVM_UNSPECIFIED_IDENTIFIER_TYPE: /* FALLTHRU */
+    default:
+        DBG_assert(0, ("basic_type..%d", type->basic_type));
+    }
 
-	return 0;
+    return 0;
 }
 
-static void generate_expression(DVM_Executable *exe, Block *current_block, Expression *expr, OpcodeBuf *ob);
+static void generate_expression(DVM_Executable *exe, Block *current_block,
+                                Expression *expr, OpcodeBuf *ob);
 
-// 为执行体加入编译器中的类定义
-static void add_classes(DKC_Compiler *compiler, DVM_Executable *exe){
-	ClassDefinition *cd_pos;
-	int i;
-	ClassDefinition *cd;
-	DVM_Class *dvm_class;
-
-	for (cd_pos = compiler->class_definition_list; cd_pos; cd_pos = cd_pos->next) {
-		dvm_class = search_class(compiler, cd_pos);
-		dvm_class->is_implemented = DVM_TRUE;
-	}
-	// 遍历编译器的类数组，获得各个类的定义，并将定义用于修复执行体中的类定义
-	for (i = 0; i < compiler->dvm_class_count; i++) {
-		cd = dkc_search_class(compiler->dvm_class[i].name);
-		add_class(exe, cd, &compiler->dvm_class[i]);
-	}
+static void
+copy_opcode_buf(DVM_CodeBlock *dest, OpcodeBuf *ob)
+{
+    dest->code_size = ob->size;
+    dest->code = fix_opcode_buf(ob);
+    dest->line_number_size = ob->line_number_size;
+    dest->line_number = ob->line_number;
+    dest->try_size = ob->try_size;
+    dest->try = ob->try;
+    dest->need_stack_size = calc_need_stack_size(dest->code,
+                                                 dest->code_size);
 }
 
-// 向执行体中添加类型指定器，并返回其索引
-static int add_type_specifier(TypeSpecifier *src, DVM_Executable *exe){
-	int ret;
+static void
+generate_field_initializer(DVM_Executable *exe,
+                           ClassDefinition *cd, DVM_Class *dvm_class)
+{
+    OpcodeBuf ob;
+    ClassDefinition *cd_pos;
+    MemberDeclaration *member_pos;
 
-	exe->type_specifier = MEM_realloc(exe->type_specifier, sizeof(DVM_TypeSpecifier) * (exe->type_specifier_count + 1));
-	copy_type_specifier_no_alloc(src, &exe->type_specifier[exe->type_specifier_count]);
-	ret = exe->type_specifier_count;
-	exe->type_specifier_count++;
+    init_opcode_buf(&ob);
 
-	return ret;
+    for (cd_pos = cd; cd_pos; cd_pos = cd_pos->super_class) {
+        for (member_pos = cd_pos->member; member_pos;
+             member_pos = member_pos->next) {
+            if (member_pos->kind != FIELD_MEMBER)
+                continue;
+
+            if (member_pos->u.field.initializer) {
+                generate_expression(exe, NULL, member_pos->u.field.initializer,
+                                    &ob);
+                generate_code(&ob,
+                              member_pos->u.field.initializer->line_number,
+                              DVM_DUPLICATE_OFFSET, 1);
+                generate_code(&ob,
+                              member_pos->u.field.initializer->line_number,
+                              DVM_POP_FIELD_INT
+                              + get_opcode_type_offset(member_pos
+                                                       ->u.field.type),
+                              member_pos->u.field.field_index);
+            }
+        }
+    }
+    copy_opcode_buf(&dvm_class->field_initializer, &ob);
 }
 
-static void generate_boolean_expression(DVM_Executable *cf, Expression *expr, OpcodeBuf *ob){
-	if (expr->u.boolean_value) {
-		generate_code(ob, expr->line_number, DVM_PUSH_INT_1BYTE, 1);
-	}
-	else {
-		generate_code(ob, expr->line_number, DVM_PUSH_INT_1BYTE, 0);
-	}
+static void
+add_classes(DKC_Compiler *compiler, DVM_Executable *exe)
+{
+    ClassDefinition *cd_pos;
+    int i;
+    ClassDefinition *cd;
+    DVM_Class *dvm_class;
+
+    for (cd_pos = compiler->class_definition_list; cd_pos;
+         cd_pos = cd_pos->next) {
+        dvm_class = search_class(compiler, cd_pos);
+        dvm_class->is_implemented = DVM_TRUE;
+        generate_field_initializer(exe, cd_pos, dvm_class);
+    }
+
+    for (i = 0; i < compiler->dvm_class_count; i++) {
+        cd = dkc_search_class(compiler->dvm_class[i].name);
+        add_class(exe, cd, &compiler->dvm_class[i]);
+    }
 }
 
-// 根据int值的大小生成入栈指令，小于256生成1字节指令，小于65536生成两字节指令，如果是常量生成常量指令
-static void generate_int_expression(DVM_Executable *cf, int line_number, int value, OpcodeBuf *ob){
-	DVM_ConstantPool cp;
-	int cp_idx;
+static int
+add_type_specifier(TypeSpecifier *src, DVM_Executable *exe)
+{
+    int ret;
 
-	if (value >= 0 && value < 256) {
-		generate_code(ob, line_number, DVM_PUSH_INT_1BYTE, value);
-	}
-	else if (value >= 0 && value < 65536) {
-		generate_code(ob, line_number, DVM_PUSH_INT_2BYTE, value);
-	}
-	else {
-		cp.tag = DVM_CONSTANT_INT;
-		cp.u.c_int = value;
-		cp_idx = add_constant_pool(cf, &cp);
-		generate_code(ob, line_number, DVM_PUSH_INT, cp_idx);
-	}
+    exe->type_specifier
+        = MEM_realloc(exe->type_specifier,
+                      sizeof(DVM_TypeSpecifier)
+                      * (exe->type_specifier_count + 1));
+    copy_type_specifier_no_alloc(src,
+                                 &exe->type_specifier
+                                 [exe->type_specifier_count]);
+
+    ret = exe->type_specifier_count;
+    exe->type_specifier_count++;
+
+    return ret;
 }
 
-// double值得1.0和0.0有专用的指令，其它double值被当作常量处理，执行常量入栈指令
-static void generate_double_expression(DVM_Executable *cf, Expression *expr, OpcodeBuf *ob){
-	DVM_ConstantPool cp;
-	int cp_idx;
-
-	if (expr->u.double_value == 0.0) {
-		generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE_0);
-	}
-	else if (expr->u.double_value == 1.0) {
-		generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE_1);
-	}
-	else {
-		cp.tag = DVM_CONSTANT_DOUBLE;
-		cp.u.c_double = expr->u.double_value;
-		cp_idx = add_constant_pool(cf, &cp);
-		generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE, cp_idx);
-	}
+static void
+generate_boolean_expression(DVM_Executable *cf, Expression *expr,
+                            OpcodeBuf *ob)
+{
+    if (expr->u.boolean_value) {
+        generate_code(ob, expr->line_number, DVM_PUSH_INT_1BYTE, 1);
+    } else {
+        generate_code(ob, expr->line_number, DVM_PUSH_INT_1BYTE, 0);
+    }
 }
 
-// 字符串常量加入常量池，执行常量入栈指令
-static void generate_string_expression(DVM_Executable *cf, Expression *expr, OpcodeBuf *ob){
-	DVM_ConstantPool cp;
-	int cp_idx;
+static void
+generate_int_expression(DVM_Executable *cf, int line_number, int value,
+                        OpcodeBuf *ob)
+{
+    DVM_ConstantPool cp;
+    int cp_idx;
 
-	cp.tag = DVM_CONSTANT_STRING;
-	cp.u.c_string = expr->u.string_value;
-	cp_idx = add_constant_pool(cf, &cp);
-	generate_code(ob, expr->line_number, DVM_PUSH_STRING, cp_idx);
+    if (value >= 0 && value < 256) {
+        generate_code(ob, line_number, DVM_PUSH_INT_1BYTE, value);
+    } else if (value >= 0 && value < 65536) {
+        generate_code(ob, line_number, DVM_PUSH_INT_2BYTE, value);
+    } else {
+        cp.tag = DVM_CONSTANT_INT;
+        cp.u.c_int = value;
+        cp_idx = add_constant_pool(cf, &cp);
+
+        generate_code(ob, line_number, DVM_PUSH_INT, cp_idx);
+    }
 }
 
-// 生成标识符，标识符可以是全局的也可以是局部的，
-static void generate_identifier(Declaration *decl, OpcodeBuf *ob, int line_number){
-	if (decl->is_local) {
-		generate_code(ob, line_number, DVM_PUSH_STACK_INT + get_opcode_type_offset(decl->type), decl->variable_index);
-	}
-	else {
-		generate_code(ob, line_number, DVM_PUSH_STATIC_INT + get_opcode_type_offset(decl->type), decl->variable_index);
-	}
+static void
+generate_double_expression(DVM_Executable *cf, Expression *expr,
+                           OpcodeBuf *ob)
+{
+    DVM_ConstantPool cp;
+    int cp_idx;
+
+    if (expr->u.double_value == 0.0) {
+        generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE_0);
+    } else if (expr->u.double_value == 1.0) {
+        generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE_1);
+    } else {
+        cp.tag = DVM_CONSTANT_DOUBLE;
+        cp.u.c_double = expr->u.double_value;
+        cp_idx = add_constant_pool(cf, &cp);
+
+        generate_code(ob, expr->line_number, DVM_PUSH_DOUBLE, cp_idx);
+    }
+}
+
+static void
+generate_string_expression(DVM_Executable *cf, Expression *expr,
+                           OpcodeBuf *ob)
+{
+    DVM_ConstantPool cp;
+    int cp_idx;
+
+    cp.tag = DVM_CONSTANT_STRING;
+    cp.u.c_string = expr->u.string_value;
+    cp_idx = add_constant_pool(cf, &cp);
+    generate_code(ob, expr->line_number, DVM_PUSH_STRING, cp_idx);
+}
+
+static void
+generate_identifier(Declaration *decl, OpcodeBuf *ob, int line_number)
+{
+    if (decl->is_local) {
+        generate_code(ob, line_number,
+                      DVM_PUSH_STACK_INT
+                      + get_opcode_type_offset(decl->type),
+                      decl->variable_index);
+    } else {
+        generate_code(ob, line_number,
+                      DVM_PUSH_STATIC_INT
+                      + get_opcode_type_offset(decl->type),
+                      decl->variable_index);
+    }
 }
 
 static void
@@ -536,6 +667,13 @@ generate_identifier_expression(DVM_Executable *exe, Block *block,
         generate_code(ob, expr->line_number,
                       DVM_PUSH_FUNCTION,
                       expr->u.identifier.u.function.function_index);
+        break;
+    case CONSTANT_IDENTIFIER:
+        generate_code(ob, expr->line_number,
+                      DVM_PUSH_CONSTANT_INT
+                      + get_opcode_type_offset(expr->u.identifier.u.constant
+                                               .constant_definition->type),
+                      expr->u.identifier.u.constant.constant_index);
         break;
     default:
         DBG_panic(("bad default. kind..%d", expr->u.identifier.kind));
@@ -691,36 +829,57 @@ generate_binary_expression(DVM_Executable *exe, Block *block,
                   code + offset);
 }
 
-// 获得可用的标签索引
-static int get_label(OpcodeBuf *ob){
-	int ret;
+static void
+generate_bit_binary_expression(DVM_Executable *exe, Block *block,
+                               Expression *expr, DVM_Opcode code,
+                               OpcodeBuf *ob)
+{
+    Expression *left = expr->u.binary_expression.left;
+    Expression *right = expr->u.binary_expression.right;
 
-	if (ob->label_table_alloc_size < ob->label_table_size + 1) {
-		ob->label_table = MEM_realloc(ob->label_table, (ob->label_table_alloc_size + LABEL_TABLE_ALLOC_SIZE)* sizeof(LabelTable));
-		ob->label_table_alloc_size += LABEL_TABLE_ALLOC_SIZE;
-	}
-	ret = ob->label_table_size;
-	ob->label_table_size++;
+    generate_expression(exe, block, left, ob);
+    generate_expression(exe, block, right, ob);
 
-	return ret;
+    generate_code(ob, expr->line_number, code);
 }
 
-// 设置标签所对应的字节码地址
-static void set_label(OpcodeBuf *ob, int label)
+static int
+get_label(OpcodeBuf *ob)
+{
+    int ret;
+
+    if (ob->label_table_alloc_size < ob->label_table_size + 1) {
+        ob->label_table = MEM_realloc(ob->label_table,
+                                      (ob->label_table_alloc_size
+                                       + LABEL_TABLE_ALLOC_SIZE)
+                                      * sizeof(LabelTable));
+        ob->label_table_alloc_size += LABEL_TABLE_ALLOC_SIZE;
+    }
+    ret = ob->label_table_size;
+    ob->label_table_size++;
+
+    return ret;
+}
+
+static void
+set_label(OpcodeBuf *ob, int label)
 {
     ob->label_table[label].label_address = ob->size;
 }
 
-static void generate_logical_and_expression(DVM_Executable *exe, Block *block,Expression *expr,OpcodeBuf *ob){
+static void
+generate_logical_and_expression(DVM_Executable *exe, Block *block,
+                                Expression *expr,
+                                OpcodeBuf *ob)
+{
     int false_label;
-	// 获取false标签的字节码地址
+
     false_label = get_label(ob);
     generate_expression(exe, block, expr->u.binary_expression.left, ob);
     generate_code(ob, expr->line_number, DVM_DUPLICATE);
     generate_code(ob, expr->line_number, DVM_JUMP_IF_FALSE, false_label);
     generate_expression(exe, block, expr->u.binary_expression.right, ob);
     generate_code(ob, expr->line_number, DVM_LOGICAL_AND);
-	// 设置false标签地址
     set_label(ob, false_label);
 }
 
@@ -764,6 +923,24 @@ generate_cast_expression(DVM_Executable *exe, Block *block,
     case DOUBLE_TO_STRING_CAST:
         generate_expression(exe, block, expr->u.cast.operand, ob);
         generate_code(ob, expr->line_number, DVM_CAST_DOUBLE_TO_STRING);
+        break;
+    case ENUM_TO_STRING_CAST:
+        generate_expression(exe, block, expr->u.cast.operand, ob);
+        generate_code(ob, expr->line_number, DVM_CAST_ENUM_TO_STRING,
+                      expr->u.cast.operand->type->u.enum_ref.enum_index);
+        break;
+    case FUNCTION_TO_DELEGATE_CAST:
+        if (expr->u.cast.operand->kind == IDENTIFIER_EXPRESSION) {
+            generate_code(ob, expr->line_number, DVM_PUSH_DELEGATE,
+                          expr->u.cast.operand->u.identifier.u.function
+                          .function_index);
+        } else {
+            /* Method's delegate is generated in generate_member_expression().
+             */
+            DBG_assert(expr->u.cast.operand->kind == MEMBER_EXPRESSION,
+                       ("kind..%d", expr->u.cast.operand->kind));
+            generate_expression(exe, block, expr->u.cast.operand, ob);
+        }
         break;
     default:
         DBG_assert(0, ("expr->u.cast.type..%d", expr->u.cast.type));
@@ -812,8 +989,12 @@ generate_index_expression(DVM_Executable *exe, Block *block,
     generate_expression(exe, block, expr->u.index_expression.array, ob);
     generate_expression(exe, block, expr->u.index_expression.index, ob);
 
-    generate_code(ob, expr->line_number, DVM_PUSH_ARRAY_INT
-                  + get_opcode_type_offset(expr->type));
+    if (dkc_is_string(expr->u.index_expression.array->type)) {
+        generate_code(ob, expr->line_number, DVM_PUSH_CHARACTER_IN_STRING);
+    } else {
+        generate_code(ob, expr->line_number, DVM_PUSH_ARRAY_INT
+                      + get_opcode_type_offset(expr->type));
+    }
 }
 
 static void
@@ -842,7 +1023,7 @@ generate_instanceof_expression(DVM_Executable *exe, Block *block,
 {
     generate_expression(exe, block, expr->u.instanceof.operand, ob);
     generate_code(ob, expr->line_number, DVM_INSTANCEOF,
-                  expr->u.instanceof.type->Class_ref.class_index);
+                  expr->u.instanceof.type->u.class_ref.class_index);
 }
 
 static void
@@ -851,7 +1032,7 @@ generate_down_cast_expression(DVM_Executable *exe, Block *block,
 {
     generate_expression(exe, block, expr->u.down_cast.operand, ob);
     generate_code(ob, expr->line_number, DVM_DOWN_CAST,
-                  expr->u.down_cast.type->Class_ref.class_index);
+                  expr->u.down_cast.type->u.class_ref.class_index);
 }
 
 static void
@@ -920,7 +1101,11 @@ generate_function_call_expression(DVM_Executable *exe, Block *block,
     }
     generate_push_argument(exe, block, fce->argument, ob);
     generate_expression(exe, block, fce->function, ob);
-    generate_code(ob, expr->line_number, DVM_INVOKE);
+    if (dkc_is_delegate(fce->function->type)) {
+        generate_code(ob, expr->line_number, DVM_INVOKE_DELEGATE);
+    } else {
+        generate_code(ob, expr->line_number, DVM_INVOKE);
+    }
 }
 
 static void
@@ -928,21 +1113,26 @@ generate_member_expression(DVM_Executable *exe, Block *block,
                            Expression *expr, OpcodeBuf *ob)
 {
     MemberDeclaration *member;
+    int method_index;
     
     member = expr->u.member_expression.declaration;
-    if (member->kind == FIELD_MEMBER) {
+
+    if (dkc_is_array(expr->u.member_expression.expression->type)
+        || dkc_is_string(expr->u.member_expression.expression->type)
+        || member->kind == METHOD_MEMBER) {
+        method_index = get_method_index(&expr->u.member_expression);
+        generate_expression(exe, block,
+                            expr->u.member_expression.expression, ob);
+        generate_code(ob, expr->line_number, DVM_PUSH_METHOD_DELEGATE,
+                      method_index);
+    } else {
+        DBG_assert(member->kind == FIELD_MEMBER,
+                   ("member->u.kind..%d", member->kind));
         generate_expression(exe, block,
                             expr->u.member_expression.expression, ob);
         generate_code(ob, expr->line_number,
                       DVM_PUSH_FIELD_INT + get_opcode_type_offset(expr->type),
                       member->u.field.field_index);
-    } else {
-        DBG_assert(member->kind == METHOD_MEMBER,
-                   ("member->u.kind..%d", member->kind));
-        dkc_compile_error(expr->line_number, METHOD_IS_NOT_CALLED_ERR,
-                          STRING_MESSAGE_ARGUMENT, "member_name",
-                          member->u.method.function_definition->name,
-                          MESSAGE_ARGUMENT_END);
     }
 }
 
@@ -1044,7 +1234,10 @@ generate_array_creation_expression(DVM_Executable *exe, Block *block,
     generate_code(ob, expr->line_number, DVM_NEW_ARRAY, dim_count, index);
 }
 
-static void generate_expression(DVM_Executable *exe, Block *current_block,Expression *expr, OpcodeBuf *ob){
+static void
+generate_expression(DVM_Executable *exe, Block *current_block,
+                    Expression *expr, OpcodeBuf *ob)
+{
     switch (expr->kind) {
     case BOOLEAN_EXPRESSION:
         generate_boolean_expression(exe, expr, ob);
@@ -1114,6 +1307,18 @@ static void generate_expression(DVM_Executable *exe, Block *current_block,Expres
         generate_binary_expression(exe, current_block, expr,
                                    DVM_LE_INT, ob);
         break;
+    case BIT_AND_EXPRESSION:
+        generate_bit_binary_expression(exe, current_block, expr,
+                                       DVM_BIT_AND, ob);
+        break;
+    case BIT_OR_EXPRESSION:
+        generate_bit_binary_expression(exe, current_block, expr,
+                                       DVM_BIT_OR, ob);
+        break;
+    case BIT_XOR_EXPRESSION:
+        generate_bit_binary_expression(exe, current_block, expr,
+                                       DVM_BIT_XOR, ob);
+        break;
     case LOGICAL_AND_EXPRESSION:
         generate_logical_and_expression(exe, current_block, expr, ob);
         break;
@@ -1125,6 +1330,10 @@ static void generate_expression(DVM_Executable *exe, Block *current_block,Expres
         generate_code(ob, expr->line_number,
                       DVM_MINUS_INT
                       + get_opcode_type_offset(expr->type));
+        break;
+    case BIT_NOT_EXPRESSION:
+        generate_expression(exe, current_block, expr->u.bit_not, ob);
+        generate_code(ob, expr->line_number, DVM_BIT_NOT);
         break;
     case LOGICAL_NOT_EXPRESSION:
         generate_expression(exe, current_block, expr->u.logical_not, ob);
@@ -1175,6 +1384,11 @@ static void generate_expression(DVM_Executable *exe, Block *current_block,Expres
     case ARRAY_CREATION_EXPRESSION:
         generate_array_creation_expression(exe, current_block, expr, ob);
         break;
+    case ENUMERATOR_EXPRESSION:
+        generate_int_expression(exe, expr->line_number,
+                                expr->u.enumerator.enumerator->value,
+                                ob);
+        break;
     case EXPRESSION_KIND_COUNT_PLUS_1:  /* FALLTHRU */
     default:
         DBG_assert(0, ("expr->kind..%d", expr->kind));
@@ -1182,7 +1396,8 @@ static void generate_expression(DVM_Executable *exe, Block *current_block,Expres
 }
 
 static void
-generate_expression_statement(DVM_Executable *exe, Block *block,Expression *expr, OpcodeBuf *ob)
+generate_expression_statement(DVM_Executable *exe, Block *block,
+                              Expression *expr, OpcodeBuf *ob)
 {
     if (expr->kind == ASSIGN_EXPRESSION) {
         generate_assign_expression(exe, block, expr, ob, DVM_TRUE);
@@ -1235,6 +1450,58 @@ generate_if_statement(DVM_Executable *exe, Block *block,
                                 ob);
     }
     set_label(ob, end_label);
+}
+
+static void
+generate_switch_statement(DVM_Executable *exe, Block *block,
+                          Statement *statement, OpcodeBuf *ob)
+{
+    SwitchStatement *switch_s = &statement->u.switch_s;
+    CaseList *case_pos;
+    ExpressionList *expr_pos;
+    int offset;
+    int case_start_label;
+    int next_case_label;
+    int end_label;
+    int line_number;
+
+    generate_expression(exe, block, switch_s->expression, ob);
+
+    end_label = get_label(ob);
+
+    for (case_pos = switch_s->case_list; case_pos;
+         case_pos = case_pos->next) {
+
+        case_start_label = get_label(ob);
+        for (expr_pos = case_pos->expression_list; expr_pos;
+             expr_pos = expr_pos->next) {
+            generate_code(ob, statement->line_number,
+                          DVM_DUPLICATE);
+            generate_expression(exe, block, expr_pos->expression, ob);
+            offset = get_binary_expression_offset(switch_s->expression,
+                                                  expr_pos->expression,
+                                                  DVM_EQ_INT);
+            generate_code(ob, expr_pos->expression->line_number,
+                          DVM_EQ_INT + offset);
+            generate_code(ob, expr_pos->expression->line_number,
+                          DVM_JUMP_IF_TRUE, case_start_label);
+            line_number = expr_pos->expression->line_number;
+        }
+        next_case_label = get_label(ob);
+        generate_code(ob, line_number, DVM_JUMP, next_case_label);
+        set_label(ob, case_start_label);
+        generate_statement_list(exe, case_pos->block,
+                                case_pos->block->statement_list, ob);
+        generate_code(ob, statement->line_number, DVM_JUMP, end_label);
+        set_label(ob, next_case_label);
+    }
+    if (switch_s->default_block) {
+        generate_statement_list(exe, switch_s->default_block,
+                                switch_s->default_block->statement_list, ob);
+    }
+
+    set_label(ob, end_label);
+    generate_code(ob, statement->line_number, DVM_POP);
 }
 
 static void
@@ -1329,9 +1596,19 @@ static void
 generate_return_statement(DVM_Executable *exe, Block *block,
                           Statement *statement, OpcodeBuf *ob)
 {
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+    Block       *block_p;
+
     DBG_assert(statement->u.return_s.return_value != NULL,
                ("return value is null."));
 
+    for (block_p = block; block_p; block_p = block_p->outer_block) {
+        if (block_p->type == TRY_CLAUSE_BLOCK
+            || block_p->type == CATCH_CLAUSE_BLOCK) {
+            generate_code(ob, statement->line_number,
+                          DVM_GO_FINALLY, compiler->current_finally_label);
+        }
+    }
     generate_expression(exe, block, statement->u.return_s.return_value, ob);
     generate_code(ob, statement->line_number, DVM_RETURN);
 }
@@ -1342,8 +1619,13 @@ generate_break_statement(DVM_Executable *exe, Block *block,
 {
     BreakStatement *break_s = &statement->u.break_s;
     Block       *block_p;
+    DVM_Boolean finally_flag = DVM_FALSE;
 
     for (block_p = block; block_p; block_p = block_p->outer_block) {
+        if (block_p->type == TRY_CLAUSE_BLOCK
+            || block_p->type == CATCH_CLAUSE_BLOCK) {
+            finally_flag = DVM_TRUE;
+        }
         if (block_p->type != WHILE_STATEMENT_BLOCK
             && block_p->type != FOR_STATEMENT_BLOCK
             && block_p->type != DO_WHILE_STATEMENT_BLOCK)
@@ -1389,6 +1671,12 @@ generate_break_statement(DVM_Executable *exe, Block *block,
                           STRING_MESSAGE_ARGUMENT, "label", break_s->label,
                           MESSAGE_ARGUMENT_END);
     }
+
+    if (finally_flag) {
+        DKC_Compiler *compiler = dkc_get_current_compiler();
+        generate_code(ob, statement->line_number,
+                      DVM_GO_FINALLY, compiler->current_finally_label);
+    }
     generate_code(ob, statement->line_number,
                   DVM_JUMP,
                   block_p->parent.statement.break_label);
@@ -1401,8 +1689,13 @@ generate_continue_statement(DVM_Executable *exe, Block *block,
 {
     ContinueStatement *continue_s = &statement->u.continue_s;
     Block       *block_p;
+    DVM_Boolean finally_flag = DVM_FALSE;
 
     for (block_p = block; block_p; block_p = block_p->outer_block) {
+        if (block_p->type == TRY_CLAUSE_BLOCK
+            || block_p->type == CATCH_CLAUSE_BLOCK) {
+            finally_flag = DVM_TRUE;
+        }
         if (block_p->type != WHILE_STATEMENT_BLOCK
             && block_p->type != FOR_STATEMENT_BLOCK
             && block_p->type != DO_WHILE_STATEMENT_BLOCK)
@@ -1448,9 +1741,102 @@ generate_continue_statement(DVM_Executable *exe, Block *block,
                           STRING_MESSAGE_ARGUMENT, "label", continue_s->label,
                           MESSAGE_ARGUMENT_END);
     }
+    if (finally_flag) {
+        DKC_Compiler *compiler = dkc_get_current_compiler();
+        generate_code(ob, statement->line_number,
+                      DVM_GO_FINALLY, compiler->current_finally_label);
+    }
     generate_code(ob, statement->line_number,
                   DVM_JUMP,
                   block_p->parent.statement.continue_label);
+}
+
+static void
+add_try_to_opcode_buf(OpcodeBuf *ob, DVM_Try *try)
+{
+    ob->try = MEM_realloc(ob->try, sizeof(DVM_Try) * (ob->try_size+1));
+    ob->try[ob->try_size] = *try;
+    ob->try_size++;
+}
+
+static void
+generate_try_statement(DVM_Executable *exe, Block *block,
+                       Statement *statement, OpcodeBuf *ob)
+{
+    TryStatement *try_s = &statement->u.try_s;
+    CatchClause *catch_pos;
+    DVM_Try dvm_try;
+    int catch_count = 0;
+    int catch_index;
+    DVM_CatchClause *dvm_catch;
+    int after_finally_label;
+    int finally_label_backup;
+    DKC_Compiler *compiler = dkc_get_current_compiler();
+
+    after_finally_label = get_label(ob);
+    finally_label_backup = compiler->current_finally_label;
+    compiler->current_finally_label = get_label(ob);
+    dvm_try.try_start_pc = ob->size;
+    generate_statement_list(exe, try_s->try_block,
+                            try_s->try_block->statement_list, ob);
+    generate_code(ob, statement->line_number,
+                  DVM_GO_FINALLY, compiler->current_finally_label);
+    generate_code(ob, statement->line_number,
+                  DVM_JUMP, after_finally_label);
+    dvm_try.try_end_pc = ob->size-1;
+
+    for (catch_pos = try_s->catch_clause; catch_pos;
+         catch_pos = catch_pos->next) {
+        catch_count++;
+    }
+    dvm_catch = MEM_malloc(sizeof(DVM_CatchClause) * catch_count);
+
+    for (catch_pos = try_s->catch_clause, catch_index = 0;
+         catch_pos;
+         catch_pos = catch_pos->next, catch_index++) {
+        dvm_catch[catch_index].class_index
+            = catch_pos->type->u.class_ref.class_index;
+        dvm_catch[catch_index].start_pc = ob->size;
+
+        generate_pop_to_identifier(catch_pos->variable_declaration,
+                                   catch_pos->line_number, ob);
+        generate_statement_list(exe, catch_pos->block,
+                                catch_pos->block->statement_list, ob);
+        generate_code(ob, catch_pos->line_number,
+                      DVM_GO_FINALLY, compiler->current_finally_label);
+        generate_code(ob, catch_pos->line_number,
+                      DVM_JUMP, after_finally_label);
+        dvm_catch[catch_index].end_pc = ob->size-1;
+    }
+    dvm_try.catch_clause = dvm_catch;
+    dvm_try.catch_count = catch_count;
+    
+    dvm_try.finally_start_pc = ob->size;
+    set_label(ob, compiler->current_finally_label);
+    if (try_s->finally_block) {
+        generate_statement_list(exe, try_s->finally_block,
+                                try_s->finally_block->statement_list, ob);
+    }
+    generate_code(ob, statement->line_number,
+                  DVM_FINALLY_END);
+    set_label(ob, after_finally_label);
+    dvm_try.finally_end_pc = ob->size-1;
+
+    add_try_to_opcode_buf(ob, &dvm_try);
+}
+
+static void
+generate_throw_statement(DVM_Executable *exe, Block *block,
+                         Statement *statement, OpcodeBuf *ob)
+{
+    if (statement->u.throw_s.exception) {
+        generate_expression(exe, block, statement->u.throw_s.exception, ob);
+        generate_code(ob, statement->line_number, DVM_THROW);
+    } else {
+        generate_identifier(statement->u.throw_s.variable_declaration, ob,
+                            statement->line_number);
+        generate_code(ob, statement->line_number, DVM_RETHROW);
+    }
 }
 
 static void
@@ -1482,6 +1868,9 @@ generate_statement_list(DVM_Executable *exe, Block *current_block,
         case IF_STATEMENT:
             generate_if_statement(exe, current_block, pos->statement, ob);
             break;
+        case SWITCH_STATEMENT:
+            generate_switch_statement(exe, current_block, pos->statement, ob);
+            break;
         case WHILE_STATEMENT:
             generate_while_statement(exe, current_block, pos->statement, ob);
             break;
@@ -1504,6 +1893,12 @@ generate_statement_list(DVM_Executable *exe, Block *current_block,
             generate_continue_statement(exe, current_block,
                                         pos->statement, ob);
             break;
+        case TRY_STATEMENT:
+            generate_try_statement(exe, current_block, pos->statement, ob);
+            break;
+        case THROW_STATEMENT:
+            generate_throw_statement(exe, current_block, pos->statement, ob);
+            break;
         case DECLARATION_STATEMENT:
             generate_initializer(exe, current_block,
                                  pos->statement, ob);
@@ -1515,140 +1910,204 @@ generate_statement_list(DVM_Executable *exe, Block *current_block,
     }
 }
 
-// 根据函数定义在编译器内寻找函数
-static int search_function(DKC_Compiler *compiler, FunctionDefinition *src){
-	int i;
-	char *src_package_name;
-	char *func_name;
 
-	src_package_name = dkc_package_name_to_string(src->package_name);
-	// 如果是类内定义的方法，则创建类名和方法名的存储空间
-	if (src->class_definition) {
-		func_name = dvm_create_method_function_name(src->class_definition->name, src->name);
-	}
-	else {
-		func_name = src->name;
-	}
-	// 遍历编译器函数数组，如果找到了函数，则释放刚刚手动分配的存储函数名，类名的内存空间
-	for (i = 0; i < compiler->dvm_function_count; i++) {
-		if (dvm_compare_package_name(src_package_name, compiler->dvm_function[i].package_name) && !strcmp(func_name, compiler->dvm_function[i].name)) {
-			MEM_free(src_package_name);
-			if (src->class_definition) {
-				MEM_free(func_name);
-			}
-			return i;
-		}
-	}
-	DBG_assert(0, ("function %s::%s not found.", src_package_name, src->name));
+static int
+search_function(DKC_Compiler *compiler, FunctionDefinition *src)
+{
+    int i;
+    char *src_package_name;
+    char *func_name;
 
-	return 0; /* make compiler happy */
+    src_package_name = dkc_package_name_to_string(src->package_name);
+    if (src->class_definition) {
+        func_name
+            = dvm_create_method_function_name(src->class_definition->name,
+                                              src->name);
+    } else {
+        func_name = src->name;
+    }
+    for (i = 0; i < compiler->dvm_function_count; i++) {
+        if (dvm_compare_package_name(src_package_name,
+                                     compiler->dvm_function[i].package_name)
+            && !strcmp(func_name, compiler->dvm_function[i].name)) {
+            MEM_free(src_package_name);
+            if (src->class_definition) {
+                MEM_free(func_name);
+            }
+            return i;
+        }
+    }
+    DBG_assert(0, ("function %s::%s not found.", src_package_name, src->name));
+
+    return 0; /* make compiler happy */
 }
 
-// 为执行体生成局部变量
-static DVM_LocalVariable *copy_local_variables(FunctionDefinition *fd, int param_count){
-	int i;
-	int local_variable_count;
-	DVM_LocalVariable *dest;
-	// 函数的局部变量为函数的局部变量数量减去形参的数量（函数内形参被当作局部变量）
-	local_variable_count = fd->local_variable_count - param_count;
-	dest = MEM_malloc(sizeof(DVM_LocalVariable) * local_variable_count);
-	for (i = 0; i < local_variable_count; i++) {
-		dest[i].name = MEM_strdup(fd->local_variable[i + param_count]->name);
-		dest[i].type = dkc_copy_type_specifier(fd->local_variable[i + param_count]->type);
-	}
+static DVM_LocalVariable *
+copy_local_variables(FunctionDefinition *fd, int param_count)
+{
+    int i;
+    int local_variable_count;
+    DVM_LocalVariable *dest;
 
-	return dest;
+    local_variable_count = fd->local_variable_count - param_count;
+
+    dest = MEM_malloc(sizeof(DVM_LocalVariable) * local_variable_count);
+
+    for (i = 0; i < local_variable_count; i++) {
+        dest[i].name
+            = MEM_strdup(fd->local_variable[i+param_count]->name);
+        dest[i].type
+            = dkc_copy_type_specifier(fd->local_variable[i+param_count]->type);
+    }
+
+    return dest;
 }
 
-// 向执行体中添加函数
-static void add_function(DVM_Executable *exe, FunctionDefinition *src, DVM_Function *dest, DVM_Boolean in_this_exe){
-	OpcodeBuf           ob;
-	// 复制函数的返回值和参数链表
-	dest->type = dkc_copy_type_specifier(src->type);
-	dest->parameter = copy_parameter_list(src->parameter, &dest->parameter_count);
-	// 如果函数定义在此执行体中并且有定义
-	if (src->block && in_this_exe) {
-		init_opcode_buf(&ob);
-		generate_statement_list(exe, src->block, src->block->statement_list, &ob);
-		dest->is_implemented = DVM_TRUE;
-		dest->code_size = ob.size;
-		dest->code = fix_opcode_buf(&ob);
-		dest->line_number_size = ob.line_number_size;
-		dest->line_number = ob.line_number;
-		dest->need_stack_size = calc_need_stack_size(dest->code, dest->code_size);
-		dest->local_variable = copy_local_variables(src, dest->parameter_count);
-		dest->local_variable_count = src->local_variable_count - dest->parameter_count;
-	}
-	else {
-		dest->is_implemented = DVM_FALSE;
-		dest->local_variable = NULL;
-		dest->local_variable_count = 0;
-	}
-	if (src->class_definition) {
-		dest->is_method = DVM_TRUE;
-	}
-	else {
-		dest->is_method = DVM_FALSE;
-	}
+static void
+add_function(DVM_Executable *exe,
+             FunctionDefinition *src, DVM_Function *dest,
+             DVM_Boolean in_this_exe)
+{
+    OpcodeBuf           ob;
+
+    dest->type = dkc_copy_type_specifier(src->type);
+    dest->parameter = copy_parameter_list(src->parameter,
+                                          &dest->parameter_count);
+
+    if (src->block && in_this_exe) {
+        init_opcode_buf(&ob);
+        generate_statement_list(exe, src->block, src->block->statement_list,
+                                &ob);
+
+        dest->is_implemented = DVM_TRUE;
+        dest->code_block.code_size = ob.size;
+        dest->code_block.code = fix_opcode_buf(&ob);
+        dest->code_block.line_number_size = ob.line_number_size;
+        dest->code_block.line_number = ob.line_number;
+        dest->code_block.line_number = ob.line_number;
+        dest->code_block.try_size = ob.try_size;
+        dest->code_block.try = ob.try;
+        dest->code_block.need_stack_size
+            = calc_need_stack_size(dest->code_block.code,
+                                   dest->code_block.code_size);
+        dest->local_variable
+            = copy_local_variables(src, dest->parameter_count);
+        dest->local_variable_count
+            = src->local_variable_count - dest->parameter_count;
+    } else {
+        dest->is_implemented = DVM_FALSE;
+        dest->local_variable = NULL;
+        dest->local_variable_count = 0;
+    }
+    if (src->class_definition) {
+        dest->is_method = DVM_TRUE;
+    } else {
+        dest->is_method = DVM_FALSE;
+    }
 }
 
-// 向执行体中添加函数
-static void add_functions(DKC_Compiler *compiler, DVM_Executable *exe){
-	FunctionDefinition  *fd;
-	int dest_idx;
-	int i;
-	DVM_Boolean *in_this_exe;
+static void
+add_functions(DKC_Compiler *compiler, DVM_Executable *exe)
+{
+    FunctionDefinition  *fd;
+    int dest_idx;
+    int i;
+    DVM_Boolean *in_this_exe;
 
-	in_this_exe = MEM_malloc(sizeof(DVM_Boolean) * compiler->dvm_function_count);
-	for (i = 0; i < compiler->dvm_function_count; i++) {
-		in_this_exe[i] = DVM_FALSE;
-	}
-	for (fd = compiler->function_list; fd; fd = fd->next) {
-		if (fd->class_definition && fd->block == NULL)
-			continue;
-		dest_idx = search_function(compiler, fd);
-		in_this_exe[dest_idx] = DVM_TRUE;
-		add_function(exe, fd, &compiler->dvm_function[dest_idx], DVM_TRUE);
-	}
-	for (i = 0; i < compiler->dvm_function_count; i++) {
-		if (in_this_exe[i])
-			continue;
-		fd = dkc_search_function(compiler->dvm_function[i].name);
-		add_function(exe, fd, &compiler->dvm_function[i], DVM_FALSE);
-	}
-	MEM_free(in_this_exe);
+    in_this_exe = MEM_malloc(sizeof(DVM_Boolean)
+                                     * compiler->dvm_function_count);
+    for (i = 0; i < compiler->dvm_function_count; i++) {
+        in_this_exe[i] = DVM_FALSE;
+    }
+    for (fd = compiler->function_list; fd; fd = fd->next) {
+        if (fd->class_definition && fd->block == NULL)
+            continue;
+
+        dest_idx = search_function(compiler, fd);
+        in_this_exe[dest_idx] = DVM_TRUE;
+        add_function(exe, fd, &compiler->dvm_function[dest_idx], DVM_TRUE);
+    }
+
+    for (i = 0; i < compiler->dvm_function_count; i++) {
+        if (in_this_exe[i])
+            continue;
+        fd = dkc_search_function(compiler->dvm_function[i].name);
+        add_function(exe, fd, &compiler->dvm_function[i], DVM_FALSE);
+    }
+    MEM_free(in_this_exe);
 }
 
-// 向执行体添加顶层执行环境
-static void add_top_level(DKC_Compiler *compiler, DVM_Executable *exe){
-	OpcodeBuf           ob;
+static void
+add_top_level(DKC_Compiler *compiler, DVM_Executable *exe)
+{
+    OpcodeBuf           ob;
 
-	init_opcode_buf(&ob);
-	generate_statement_list(exe, NULL, compiler->statement_list, &ob);
-	exe->code_size = ob.size;
-	exe->code = fix_opcode_buf(&ob);
-	exe->line_number_size = ob.line_number_size;
-	exe->line_number = ob.line_number;
-	exe->need_stack_size = calc_need_stack_size(exe->code, exe->code_size);
+    init_opcode_buf(&ob);
+    generate_statement_list(exe, NULL, compiler->statement_list,
+                            &ob);
+    
+    exe->top_level.code_size = ob.size;
+    exe->top_level.code = fix_opcode_buf(&ob);
+    exe->top_level.line_number_size = ob.line_number_size;
+    exe->top_level.line_number = ob.line_number;
+    exe->top_level.try_size = ob.try_size;
+    exe->top_level.try = ob.try;
+    exe->top_level.need_stack_size
+        = calc_need_stack_size(exe->top_level.code, exe->top_level.code_size);
 }
 
-// 字节码生成的公共接口
-DVM_Executable* dkc_generate(DKC_Compiler *compiler){
+static void
+generate_constant_initializer(DKC_Compiler *compiler, DVM_Executable *exe)
+{
+    ConstantDefinition *cd_pos;
+    OpcodeBuf           ob;
+
+    init_opcode_buf(&ob);
+    for (cd_pos = compiler->constant_definition_list; cd_pos;
+         cd_pos = cd_pos->next) {
+        if (cd_pos->initializer) {
+            generate_expression(exe, NULL, cd_pos->initializer, &ob);
+            generate_code(&ob, cd_pos->line_number,
+                          DVM_POP_CONSTANT_INT
+                          + get_opcode_type_offset(cd_pos->type),
+                          cd_pos->index);
+        }
+    }
+    /* BUGBUG use copy_opcode_buf() */
+    exe->constant_initializer.code_size = ob.size;
+    exe->constant_initializer.code = fix_opcode_buf(&ob);
+    exe->constant_initializer.line_number_size = ob.line_number_size;
+    exe->constant_initializer.line_number = ob.line_number;
+    exe->constant_initializer.try_size = ob.try_size;
+    exe->constant_initializer.try = ob.try;
+    exe->constant_initializer.need_stack_size
+        = calc_need_stack_size(exe->constant_initializer.code,
+                               exe->constant_initializer.code_size);
+
+}
+
+DVM_Executable *
+dkc_generate(DKC_Compiler *compiler)
+{
     DVM_Executable      *exe;
-	// 为执行体分配内存
+
     exe = alloc_executable(compiler->package_name);
+
     exe->function_count = compiler->dvm_function_count;
     exe->function = compiler->dvm_function;
     exe->class_count = compiler->dvm_class_count;
     exe->class_definition = compiler->dvm_class;
-    // 添加全局变量
-	add_global_variable(compiler, exe);
-    // 添加类
-	add_classes(compiler, exe);
-    // 添加函数
-	add_functions(compiler, exe);
-    // 添加顶层环境
-	add_top_level(compiler, exe);
+    exe->enum_count = compiler->dvm_enum_count;
+    exe->enum_definition = compiler->dvm_enum;
+    exe->constant_count = compiler->dvm_constant_count;
+    exe->constant_definition = compiler->dvm_constant;
+
+    add_global_variable(compiler, exe);
+    add_classes(compiler, exe);
+    add_functions(compiler, exe);
+    add_top_level(compiler, exe);
+
+    generate_constant_initializer(compiler, exe);
 
     return exe;
 }

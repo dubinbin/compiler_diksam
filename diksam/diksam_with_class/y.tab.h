@@ -33,8 +33,6 @@
    This special exception was added by the Free Software Foundation in
    version 2.2 of Bison.  */
 
-#include "stdafx.h"
-
 /* Tokens.  */
 #ifndef YYTOKENTYPE
 # define YYTOKENTYPE
@@ -49,69 +47,86 @@
      IF = 263,
      ELSE = 264,
      ELSIF = 265,
-     WHILE = 266,
-     DO_T = 267,
-     FOR = 268,
-     FOREACH = 269,
-     RETURN_T = 270,
-     BREAK = 271,
-     CONTINUE = 272,
-     NULL_T = 273,
-     LP = 274,
-     RP = 275,
-     LC = 276,
-     RC = 277,
-     LB = 278,
-     RB = 279,
-     SEMICOLON = 280,
-     COLON = 281,
-     COMMA = 282,
-     ASSIGN_T = 283,
-     LOGICAL_AND = 284,
-     LOGICAL_OR = 285,
-     EQ = 286,
-     NE = 287,
-     GT = 288,
-     GE = 289,
-     LT = 290,
-     LE = 291,
-     ADD = 292,
-     SUB = 293,
-     MUL = 294,
-     DIV = 295,
-     MOD = 296,
-     TRUE_T = 297,
-     FALSE_T = 298,
-     EXCLAMATION = 299,
-     DOT = 300,
-     ADD_ASSIGN_T = 301,
-     SUB_ASSIGN_T = 302,
-     MUL_ASSIGN_T = 303,
-     DIV_ASSIGN_T = 304,
-     MOD_ASSIGN_T = 305,
-     INCREMENT = 306,
-     DECREMENT = 307,
-     VOID_T = 308,
-     BOOLEAN_T = 309,
-     INT_T = 310,
-     DOUBLE_T = 311,
-     STRING_T = 312,
-     NEW = 313,
-     REQUIRE = 314,
-     RENAME = 315,
-     CLASS_T = 316,
-     INTERFACE_T = 317,
-     PUBLIC_T = 318,
-     PRIVATE_T = 319,
-     VIRTUAL_T = 320,
-     OVERRIDE_T = 321,
-     ABSTRACT_T = 322,
-     THIS_T = 323,
-     SUPER_T = 324,
-     CONSTRUCTOR = 325,
-     INSTANCEOF = 326,
-     DOWN_CAST_BEGIN = 327,
-     DOWN_CAST_END = 328
+     SWITCH = 266,
+     CASE = 267,
+     DEFAULT_T = 268,
+     WHILE = 269,
+     DO_T = 270,
+     FOR = 271,
+     FOREACH = 272,
+     RETURN_T = 273,
+     BREAK = 274,
+     CONTINUE = 275,
+     NULL_T = 276,
+     LP = 277,
+     RP = 278,
+     LC = 279,
+     RC = 280,
+     LB = 281,
+     RB = 282,
+     SEMICOLON = 283,
+     COLON = 284,
+     COMMA = 285,
+     ASSIGN_T = 286,
+     LOGICAL_AND = 287,
+     LOGICAL_OR = 288,
+     EQ = 289,
+     NE = 290,
+     GT = 291,
+     GE = 292,
+     LT = 293,
+     LE = 294,
+     ADD = 295,
+     SUB = 296,
+     MUL = 297,
+     DIV = 298,
+     MOD = 299,
+     BIT_AND = 300,
+     BIT_OR = 301,
+     BIT_XOR = 302,
+     BIT_NOT = 303,
+     TRUE_T = 304,
+     FALSE_T = 305,
+     EXCLAMATION = 306,
+     DOT = 307,
+     ADD_ASSIGN_T = 308,
+     SUB_ASSIGN_T = 309,
+     MUL_ASSIGN_T = 310,
+     DIV_ASSIGN_T = 311,
+     MOD_ASSIGN_T = 312,
+     INCREMENT = 313,
+     DECREMENT = 314,
+     TRY = 315,
+     CATCH = 316,
+     FINALLY = 317,
+     THROW = 318,
+     THROWS = 319,
+     VOID_T = 320,
+     BOOLEAN_T = 321,
+     INT_T = 322,
+     DOUBLE_T = 323,
+     STRING_T = 324,
+     NATIVE_POINTER_T = 325,
+     NEW = 326,
+     REQUIRE = 327,
+     RENAME = 328,
+     CLASS_T = 329,
+     INTERFACE_T = 330,
+     PUBLIC_T = 331,
+     PRIVATE_T = 332,
+     VIRTUAL_T = 333,
+     OVERRIDE_T = 334,
+     ABSTRACT_T = 335,
+     THIS_T = 336,
+     SUPER_T = 337,
+     CONSTRUCTOR = 338,
+     INSTANCEOF = 339,
+     DOWN_CAST_BEGIN = 340,
+     DOWN_CAST_END = 341,
+     DELEGATE = 342,
+     FINAL = 343,
+     ENUM = 344,
+     CONST = 345
    };
 #endif
 /* Tokens.  */
@@ -123,69 +138,86 @@
 #define IF 263
 #define ELSE 264
 #define ELSIF 265
-#define WHILE 266
-#define DO_T 267
-#define FOR 268
-#define FOREACH 269
-#define RETURN_T 270
-#define BREAK 271
-#define CONTINUE 272
-#define NULL_T 273
-#define LP 274
-#define RP 275
-#define LC 276
-#define RC 277
-#define LB 278
-#define RB 279
-#define SEMICOLON 280
-#define COLON 281
-#define COMMA 282
-#define ASSIGN_T 283
-#define LOGICAL_AND 284
-#define LOGICAL_OR 285
-#define EQ 286
-#define NE 287
-#define GT 288
-#define GE 289
-#define LT 290
-#define LE 291
-#define ADD 292
-#define SUB 293
-#define MUL 294
-#define DIV 295
-#define MOD 296
-#define TRUE_T 297
-#define FALSE_T 298
-#define EXCLAMATION 299
-#define DOT 300
-#define ADD_ASSIGN_T 301
-#define SUB_ASSIGN_T 302
-#define MUL_ASSIGN_T 303
-#define DIV_ASSIGN_T 304
-#define MOD_ASSIGN_T 305
-#define INCREMENT 306
-#define DECREMENT 307
-#define VOID_T 308
-#define BOOLEAN_T 309
-#define INT_T 310
-#define DOUBLE_T 311
-#define STRING_T 312
-#define NEW 313
-#define REQUIRE 314
-#define RENAME 315
-#define CLASS_T 316
-#define INTERFACE_T 317
-#define PUBLIC_T 318
-#define PRIVATE_T 319
-#define VIRTUAL_T 320
-#define OVERRIDE_T 321
-#define ABSTRACT_T 322
-#define THIS_T 323
-#define SUPER_T 324
-#define CONSTRUCTOR 325
-#define INSTANCEOF 326
-#define DOWN_CAST_BEGIN 327
-#define DOWN_CAST_END 328
+#define SWITCH 266
+#define CASE 267
+#define DEFAULT_T 268
+#define WHILE 269
+#define DO_T 270
+#define FOR 271
+#define FOREACH 272
+#define RETURN_T 273
+#define BREAK 274
+#define CONTINUE 275
+#define NULL_T 276
+#define LP 277
+#define RP 278
+#define LC 279
+#define RC 280
+#define LB 281
+#define RB 282
+#define SEMICOLON 283
+#define COLON 284
+#define COMMA 285
+#define ASSIGN_T 286
+#define LOGICAL_AND 287
+#define LOGICAL_OR 288
+#define EQ 289
+#define NE 290
+#define GT 291
+#define GE 292
+#define LT 293
+#define LE 294
+#define ADD 295
+#define SUB 296
+#define MUL 297
+#define DIV 298
+#define MOD 299
+#define BIT_AND 300
+#define BIT_OR 301
+#define BIT_XOR 302
+#define BIT_NOT 303
+#define TRUE_T 304
+#define FALSE_T 305
+#define EXCLAMATION 306
+#define DOT 307
+#define ADD_ASSIGN_T 308
+#define SUB_ASSIGN_T 309
+#define MUL_ASSIGN_T 310
+#define DIV_ASSIGN_T 311
+#define MOD_ASSIGN_T 312
+#define INCREMENT 313
+#define DECREMENT 314
+#define TRY 315
+#define CATCH 316
+#define FINALLY 317
+#define THROW 318
+#define THROWS 319
+#define VOID_T 320
+#define BOOLEAN_T 321
+#define INT_T 322
+#define DOUBLE_T 323
+#define STRING_T 324
+#define NATIVE_POINTER_T 325
+#define NEW 326
+#define REQUIRE 327
+#define RENAME 328
+#define CLASS_T 329
+#define INTERFACE_T 330
+#define PUBLIC_T 331
+#define PRIVATE_T 332
+#define VIRTUAL_T 333
+#define OVERRIDE_T 334
+#define ABSTRACT_T 335
+#define THIS_T 336
+#define SUPER_T 337
+#define CONSTRUCTOR 338
+#define INSTANCEOF 339
+#define DOWN_CAST_BEGIN 340
+#define DOWN_CAST_END 341
+#define DELEGATE 342
+#define FINAL 343
+#define ENUM 344
+#define CONST 345
 
 
 
@@ -206,6 +238,8 @@ typedef union YYSTYPE
     StatementList       *statement_list;
     Block               *block;
     Elsif               *elsif;
+    CaseList            *case_list;
+    CatchClause         *catch_clause;
     AssignmentOperator  assignment_operator;
     TypeSpecifier       *type_specifier;
     DVM_BasicType       basic_type_specifier;
@@ -215,9 +249,11 @@ typedef union YYSTYPE
     ExtendsList         *extends_list;
     MemberDeclaration   *member_declaration;
     FunctionDefinition  *function_definition;
+    ExceptionList       *exception_list;
+    Enumerator          *enumerator;
 }
 /* Line 1529 of yacc.c.  */
-#line 219 "y.tab.h"
+#line 257 "y.tab.h"
 	YYSTYPE;
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
 # define YYSTYPE_IS_DECLARED 1

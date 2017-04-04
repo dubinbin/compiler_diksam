@@ -1,7 +1,5 @@
 #ifndef PRIVATE_DBG_H_INCLUDED
 #define PRIVATE_DBG_H_INCLUDED
-
-#include "stdafx.h"
 #include <stdio.h>
 #include "DBG.h"
 
